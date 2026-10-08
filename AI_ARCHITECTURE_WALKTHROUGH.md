@@ -1,3 +1,5 @@
+> **Note (October 2026):** This document describes a target architecture. Several components it mentions (SMS gateway, woreda offline sync agent, daily digest SMS, RAG over EPHI guidelines, Gemini 1.5) are **not implemented**. See `docs/SYSTEM_SPEC.md` for the current state and the Phase 1 plan.
+
 # System Architecture Inquiry
 
 **Q1: Walk me through exactly where AI runs in your system and where it doesn't.**
