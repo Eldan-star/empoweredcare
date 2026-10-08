@@ -30,13 +30,12 @@ from models.schemas import (
     PatientRecord, PatientRecordResponse, VitalSigns
 )
 from services.gemini_service import GeminiService
+from services.llm import get_llm
 from services.agents import (
     SuperAgent, DataAssistantAgent, ChatSupervisor,
     ExtractionAgent, ValidationAgent, RiskAnalysisAgent, AlertGenerationAgent
 )
-from services.ocr_engine import OCREngine
 from services.auth_service import AuthService
-from services.layout_detector import LayoutDetector
 from services.preprocessor import Preprocessor
 from services.structurer import Structurer
 
@@ -104,7 +103,8 @@ app.add_middleware(
 # Initialize core services
 logger.info("🔧 Initializing Core Services...")
 try:
-    gemini_service = GeminiService()
+    gemini_service = GeminiService()  # vision/OCR calls
+    llm = get_llm(gemini_service)      # text agents; LLM_PROVIDER selects the vendor
     
     # Lazy load or optional services
     ocr_engine = None
@@ -118,15 +118,15 @@ except Exception as e:
 # Initialize agents
 logger.info("🤖 Initializing Dynamic Agents...")
 try:
-    super_agent = SuperAgent(gemini_service)
-    data_assistant = DataAssistantAgent(gemini_service)
-    chat_supervisor = ChatSupervisor(gemini_service, data_assistant)
+    super_agent = SuperAgent(llm)
+    data_assistant = DataAssistantAgent(llm)
+    chat_supervisor = ChatSupervisor(llm, data_assistant)
     
     # Standard agents (can be used individually if needed)
-    extraction_agent = ExtractionAgent(gemini_service)
-    validation_agent = ValidationAgent(gemini_service)
-    risk_agent = RiskAnalysisAgent(gemini_service)
-    alert_agent = AlertGenerationAgent(gemini_service)
+    extraction_agent = ExtractionAgent(llm)
+    validation_agent = ValidationAgent(llm)
+    risk_agent = RiskAnalysisAgent(llm)
+    alert_agent = AlertGenerationAgent(llm)
     
     logger.info("✅ Dynamic Agents and Chatbot initialized successfully")
 except Exception as e:
@@ -177,6 +177,7 @@ def get_ocr_engine():
     global ocr_engine
     if ocr_engine is None:
         logger.info("🔍 Loading OCR Engine...")
+        from services.ocr_engine import OCREngine  # heavy (PaddleOCR); imported on first use
         ocr_engine = OCREngine()
     return ocr_engine
 
@@ -184,6 +185,7 @@ def get_layout_detector():
     global layout_detector
     if layout_detector is None:
         logger.info("🔍 Loading Layout Detector...")
+        from services.layout_detector import LayoutDetector  # heavy (YOLO); imported on first use
         layout_detector = LayoutDetector()
     return layout_detector
 

@@ -1,8 +1,7 @@
-import { useNavigate } from 'react-router-dom';
-import { Menu, Bell, Moon, Sun, LogOut, User } from 'lucide-react';
-import { useAppStore } from '@/store/appStore';
-import { useAuthStore } from '@/store/authStore';
-import { Button } from '@/components/ui/button';
+import { useNavigate } from "react-router-dom";
+import { Menu, Moon, Sun } from "lucide-react";
+import { useAppStore } from "@/store/appStore";
+import { useAuthStore } from "@/store/authStore";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,83 +9,114 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { toast } from 'sonner';
+} from "@/components/ui/dropdown-menu";
+import { isoWeek } from "@/components/editorial";
+import { useHealth } from "@/hooks/use-health";
+import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 
 interface Props {
   onMenuClick: () => void;
 }
 
+/** Masthead: week, scope, backend status, and account controls. */
 export function TopNav({ onMenuClick }: Props) {
   const { darkMode, toggleDarkMode, notifications, markAllRead } = useAppStore();
   const { user, logout } = useAuthStore();
   const navigate = useNavigate();
-  const unread = notifications.filter((n) => !n.read).length;
+  const health = useHealth();
+  const unread = notifications.filter((n) => !n.read);
+  const { week, year } = isoWeek();
 
   const handleLogout = () => {
     logout();
-    toast.success('Signed out successfully');
-    navigate('/login');
+    toast.success("Signed out");
+    navigate("/login");
   };
 
-  const initials = user?.full_name
-    ? user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)
-    : user?.email?.[0]?.toUpperCase() || '?';
+  const online = health.isSuccess;
+  const statusText = health.isLoading ? "Checking backend" : online ? "Backend online" : "Backend unreachable";
 
   return (
-    <header className="sticky top-0 z-30 h-20 bg-background/60 backdrop-blur-xl border-b border-border/50 flex items-center justify-between px-8 gap-4">
-      <div className="flex items-center gap-3">
-        <button onClick={onMenuClick} className="lg:hidden p-2 hover:bg-muted rounded-xl transition-colors">
-          <Menu className="h-6 w-6" />
+    <header className="sticky top-0 z-30 bg-background border-b border-border">
+      <div className="h-12 flex items-center gap-4 px-4 md:px-8">
+        <button onClick={onMenuClick} className="lg:hidden -ml-1 p-1.5 text-muted-foreground hover:text-foreground" aria-label="Open navigation">
+          <Menu className="h-5 w-5" />
         </button>
-      </div>
 
-      <div className="flex items-center gap-4">
-        <Button variant="ghost" size="icon" onClick={toggleDarkMode} className="h-10 w-10 rounded-xl hover:bg-primary/5 transition-all">
-          {darkMode ? <Sun className="h-5 w-5 text-yellow-500" /> : <Moon className="h-5 w-5 text-primary" />}
-        </Button>
+        <div className="flex items-center gap-3 min-w-0 text-[0.8125rem]">
+          <span className="num whitespace-nowrap">
+            Week {week} · {year}
+          </span>
+          <span className="hidden sm:inline text-border">|</span>
+          <span className="hidden sm:inline text-muted-foreground whitespace-nowrap">National view</span>
+        </div>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-10 w-10 rounded-xl relative hover:bg-primary/5 transition-all"
-          onClick={markAllRead}
-        >
-          <Bell className="h-5 w-5 text-muted-foreground" />
-          {unread > 0 && (
-            <span className="absolute top-2 right-2 w-2 h-2 bg-risk-high rounded-full ring-2 ring-background animate-bounce" />
-          )}
-        </Button>
+        <div className="ml-auto flex items-center gap-1">
+          <span className="hidden md:inline-flex items-center gap-2 mr-3 text-[0.75rem] text-muted-foreground" role="status">
+            <span
+              aria-hidden
+              className={cn(
+                "h-1.5 w-1.5",
+                health.isLoading ? "bg-muted-foreground" : online ? "bg-tier-clear" : "bg-tier-red",
+              )}
+            />
+            {statusText}
+          </span>
 
-        <div className="pl-4 border-l border-border/50 ml-2">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <button className="flex items-center gap-3 p-1 rounded-xl hover:bg-muted/50 transition-all group">
-                <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center text-white text-xs font-black shadow-lg shadow-primary/20 group-hover:scale-105 transition-transform">
-                  {initials}
-                </div>
-                <div className="hidden sm:block text-left">
-                  <p className="text-xs font-black leading-none tracking-tight">{user?.full_name || 'System User'}</p>
-                  <p className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest mt-1">
-                    {user?.role || 'operator'}
-                  </p>
-                </div>
+              <button className="relative hidden sm:inline-block px-2 py-1 text-[0.8125rem] text-muted-foreground hover:text-foreground" aria-label={`Notifications, ${unread.length} unread`}>
+                Notices
+                {unread.length > 0 && <span className="num ml-1.5 text-foreground">{unread.length}</span>}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuContent align="end" className="w-80">
+              <DropdownMenuLabel className="label-caps">This session</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {notifications.length === 0 ? (
+                <p className="px-2 py-3 text-sm text-muted-foreground">No notices yet.</p>
+              ) : (
+                notifications.slice(0, 8).map((n) => (
+                  <p key={n.id} className={cn("px-2 py-2 text-sm border-b border-border last:border-0", !n.read && "font-medium")}>
+                    {n.message}
+                  </p>
+                ))
+              )}
+              {unread.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={markAllRead}>Mark all as read</DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <button
+            onClick={toggleDarkMode}
+            className="p-2 text-muted-foreground hover:text-foreground"
+            aria-label={darkMode ? "Switch to light theme" : "Switch to dark theme"}
+          >
+            {darkMode ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button className="ml-1 pl-3 border-l border-border text-[0.8125rem] hover:underline underline-offset-4 max-w-[7rem] sm:max-w-[10rem] truncate">
+                {user?.full_name || user?.email || "Account"}
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel className="font-normal">
-                <p className="text-sm font-medium">{user?.full_name || 'User'}</p>
-                <p className="text-xs text-muted-foreground">{user?.email}</p>
+                <p className="text-sm">{user?.full_name || "Signed in"}</p>
+                <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
-                <User className="h-4 w-4 mr-2" />
-                My Profile
-              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/profile")}>Profile</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => navigate("/settings")}>Settings</DropdownMenuItem>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={handleLogout} className="cursor-pointer text-risk-high focus:text-risk-high">
-                <LogOut className="h-4 w-4 mr-2" />
-                Sign Out
+              <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
+                Sign out
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

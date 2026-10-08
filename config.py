@@ -25,7 +25,15 @@ API_TITLE = "Empowered Care - Multi-Agent Disease Outbreak Detection System"
 API_VERSION = "1.0.0"
 
 # Security Settings
-SECRET_KEY = os.getenv("SECRET_KEY", "7b9c9f8e7d6c5b4a3a2b1c0d9e8f7a6b5c4d3e2f1a0b9c8d7e6f5a4b3c2d1e0f")
+# Environment: "development" allows a throwaway key; anything else requires SECRET_KEY.
+APP_ENV = os.getenv("APP_ENV", "development")
+SECRET_KEY = os.getenv("SECRET_KEY")
+if not SECRET_KEY:
+    if APP_ENV != "development":
+        raise RuntimeError("SECRET_KEY must be set when APP_ENV is not 'development'")
+    import secrets
+    # Random per process: tokens stop working on restart, which is acceptable in development.
+    SECRET_KEY = secrets.token_hex(32)
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24  # 24 hours
 INVITE_TOKEN_EXPIRE_HOURS = 48
@@ -53,7 +61,7 @@ GEMINI_MODEL_PREFERENCES = [
 ]
 
 # Validation Settings
-MAX_TEXT_LENGTH = 1000
+MAX_TEXT_LENGTH = int(os.getenv("MAX_TEXT_LENGTH", "20000"))
 MAX_QUERY_LENGTH = 500
 VALID_SYMPTOMS = [
     "fever", "cough", "headache", "vomiting", "diarrhea",
@@ -73,4 +81,12 @@ RISK_THRESHOLDS = {
 MAX_STORED_REPORTS = 1000
 
 # CORS Settings (restrict in production)
-ALLOWED_ORIGINS = ["*"]  # Change to specific domains in production
+# Comma-separated list, e.g. "https://app.example.org,http://localhost:8080"
+ALLOWED_ORIGINS = [
+    o.strip()
+    for o in os.getenv("ALLOWED_ORIGINS", "http://localhost:8080,http://127.0.0.1:8080").split(",")
+    if o.strip()
+]
+
+# Web scraping in the context research agent (Google/Bing result pages) is off by default.
+ENABLE_WEB_RESEARCH = os.getenv("ENABLE_WEB_RESEARCH", "false").lower() == "true"

@@ -1,79 +1,57 @@
-import { motion } from 'framer-motion';
-import { CheckCircle2, Loader2, Circle } from 'lucide-react';
-import type { AgentStep } from '@/types';
+import { useEffect, useState } from "react";
 
-const steps: { key: AgentStep; label: string; description: string }[] = [
-  { key: 'extractor', label: 'Data Extractor', description: 'Extracting entities from report...' },
-  { key: 'validator', label: 'Validator Agent', description: 'Validating data accuracy...' },
-  { key: 'risk_analyzer', label: 'Risk Analyzer', description: 'Assessing outbreak risk level...' },
-  { key: 'alert_generator', label: 'Alert Generator', description: 'Generating alerts & recommendations...' },
+/** What the backend does to a report, in order. Shown as a description, not as fake progress. */
+const STAGES = [
+  ["Extract", "Split the text into one record per place and condition."],
+  ["Check", "Look for missing fields and implausible counts."],
+  ["Rate", "Four prompts rate the record from different angles."],
+  ["Draft", "Write the summary and suggested actions."],
 ];
 
 interface Props {
-  currentStep?: AgentStep | null;
-  completedSteps?: AgentStep[];
   isProcessing?: boolean;
+  /** Kept for compatibility with older callers; ignored. */
+  currentStep?: unknown;
+  completedSteps?: unknown;
 }
 
-export function AgentPipeline({ 
-  currentStep = null, 
-  completedSteps = [], 
-  isProcessing = false 
-}: Props) {
+export function AgentPipeline({ isProcessing = false }: Props) {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!isProcessing) return;
+    setElapsed(0);
+    const started = Date.now();
+    const t = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(t);
+  }, [isProcessing]);
+
   return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider">
-        AI Agent Pipeline
-      </h3>
-      <div className="space-y-2">
-        {steps.map((step, i) => {
-          const done = completedSteps.includes(step.key);
-          const active = currentStep === step.key;
-          return (
-            <motion.div
-              key={step.key}
-              initial={{ opacity: 0, x: -20 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ delay: i * 0.1 }}
-              className={`flex items-center gap-3 p-3 rounded-lg border transition-all ${
-                active
-                  ? 'border-primary bg-primary/5 shadow-sm'
-                  : done
-                  ? 'border-health/30 bg-health/5'
-                  : 'border-border bg-card'
-              }`}
-            >
-              {done ? (
-                <CheckCircle2 className="h-5 w-5 text-health shrink-0" />
-              ) : active ? (
-                <Loader2 className="h-5 w-5 text-primary animate-spin shrink-0" />
-              ) : (
-                <Circle className="h-5 w-5 text-muted-foreground/40 shrink-0" />
-              )}
-              <div className="flex-1 min-w-0">
-                <p className={`text-sm font-medium ${active ? 'text-primary' : done ? 'text-health' : 'text-muted-foreground'}`}>
-                  {step.label}
-                </p>
-                {active && (
-                  <motion.p
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="text-xs text-muted-foreground"
-                  >
-                    {step.description}
-                  </motion.p>
-                )}
-              </div>
-              {done && <span className="text-xs text-health font-medium">Done</span>}
-            </motion.div>
-          );
-        })}
+    <div>
+      <div className="flex items-baseline justify-between border-t border-foreground pt-2 mb-3">
+        <h2 className="text-lg font-medium">What happens next</h2>
+        <span className="label-caps" role="status" aria-live="polite">
+          {isProcessing ? (
+            <>
+              Processing · <span className="num">{elapsed}s</span>
+            </>
+          ) : (
+            "Idle"
+          )}
+        </span>
       </div>
-      {isProcessing && (
-        <p className="text-xs text-center text-muted-foreground animate-pulse">
-          Analyzing with 4 AI Agents...
-        </p>
-      )}
+      <ol className="text-sm">
+        {STAGES.map(([name, desc], i) => (
+          <li key={name} className="grid grid-cols-[1.5rem_4.5rem_1fr] gap-2 py-2 border-b border-border">
+            <span className="num text-xs text-muted-foreground pt-0.5">{i + 1}</span>
+            <span className="font-medium">{name}</span>
+            <span className="text-muted-foreground">{desc}</span>
+          </li>
+        ))}
+      </ol>
+      <p className="text-xs text-muted-foreground mt-3">
+        Usually 20–90 seconds, depending on length. The stages run on the server; this page does not track them individually.
+      </p>
     </div>
   );
 }

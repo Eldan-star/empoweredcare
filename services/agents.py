@@ -6,8 +6,7 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Union
 from models.schemas import OutbreakReport, ValidationResult, RiskAnalysis, AlertMessage, ConsensusResult, ContextData
 from services.gemini_service import GeminiService
-from services.research_agent import ContextResearchAgent
-from config import VALID_SYMPTOMS, MAX_STORED_REPORTS, BASE_DIR
+from config import VALID_SYMPTOMS, MAX_STORED_REPORTS, BASE_DIR, ENABLE_WEB_RESEARCH
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -316,7 +315,11 @@ class SuperAgent:
         self.validator = ValidationAgent(gemini_service)
         self.risk_agent = RiskAnalysisAgent(gemini_service)
         self.alert_agent = AlertGenerationAgent(gemini_service)
-        self.research_agent = ContextResearchAgent(gemini_service)
+        self.research_agent = None
+        if ENABLE_WEB_RESEARCH:
+            # crawl4ai is heavy and only needed when web research is switched on.
+            from services.research_agent import ContextResearchAgent
+            self.research_agent = ContextResearchAgent(gemini_service)
 
     async def process_outbreak_parallel(self, text: str, historical_context: str = "") -> List[Dict[str, Any]]:
         """Dynamic hierarchical processing of outbreak reports (Supports multiple records)."""
@@ -329,7 +332,7 @@ class SuperAgent:
         for report in all_extracted_reports:
             # 2. Dynamic Research Agent (per location)
             context_data = None
-            if report.location and report.location != "Unknown":
+            if ENABLE_WEB_RESEARCH and report.location and report.location != "Unknown":
                 logger.info(f"🧠 SuperAgent: Spawning Research Agent for {report.location}...")
                 context_data = await self.research_agent.research(report.location)
 

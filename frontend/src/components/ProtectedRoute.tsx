@@ -28,7 +28,7 @@ export function ProtectedRoute({ children, requireAdmin = false, allowedRoles }:
   }
 
   // allowedRoles check
-  if (allowedRoles && user && !allowedRoles.includes(user.role as any)) {
+  if (allowedRoles && user && !allowedRoles.includes(user.role)) {
     return <Navigate to="/dashboard" replace />;
   }
 
