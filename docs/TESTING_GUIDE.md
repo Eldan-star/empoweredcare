@@ -26,11 +26,21 @@ Tick the boxes as you go. If anything fails, copy the error text, or take a scre
 3. Copy `.env.example` to `.env` and fill in:
    - `SECRET_KEY`: any long random string. Generate one with `python -c "import secrets; print(secrets.token_hex(32))"`.
    - `GEMINI_API_KEY`: your Google AI key.
-4. **Install the backend.** Choose one:
-   - **Quick install (recommended for testing).** This is enough for everything except the broken scanned-document endpoint, and I tested that the server starts with it:
+4. **Install the backend.** Use **Python 3.12**. Some of the pinned packages, such as numpy 1.26.4 and pillow 10.4.0, have no ready-made downloads for newer versions like Python 3.14. On those, pip tries to build them from source code, which fails unless you have a C compiler installed. Choose one:
+   - **Quick install (recommended for testing).** This is enough for everything except the broken scanned-document endpoint, and I tested that the server starts with it.
+     Windows (PowerShell):
      ```
-     python -m venv .venv
-     source .venv/bin/activate        # Windows: .venv\Scripts\activate
+     py -3.12 -m venv .venv
+     .venv\Scripts\Activate.ps1
+     ```
+     If PowerShell says running scripts is disabled, run `Set-ExecutionPolicy -Scope Process Bypass` once, then activate again.
+     Mac / Linux:
+     ```
+     python3.12 -m venv .venv
+     source .venv/bin/activate
+     ```
+     Your prompt should now start with `(.venv)`. If it doesn't, stop: pip would install into your computer's main Python instead. Then, on any system:
+     ```
      pip install fastapi==0.115.0 "uvicorn[standard]==0.30.6" python-multipart==0.0.9 python-jose==3.5.0 passlib==1.7.4 bcrypt==4.0.1 python-dotenv==1.0.1 google-generativeai==0.8.6 pydantic==2.12.5 email-validator==2.3.0 APScheduler==3.11.2 aiosmtplib==5.1.0 pandas numpy==1.26.4 opencv-python-headless==4.11.0.86 pdf2image==1.17.0 pillow==10.4.0 openpyxl==3.1.5 aiofiles
      ```
    - **Full install:** `pip install -r requirements.txt`. This pulls in PyTorch and NVIDIA GPU packages (several GB), and **those packages won't install on a Mac**.
