@@ -20,10 +20,8 @@ import DataVault from "@/pages/DataVault";
 import RecordDetailsPage from "@/pages/RecordDetailsPage";
 import NotFound from "@/pages/NotFound";
 import DataEntryPage from "@/pages/DataEntryPage";
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useAppStore } from "@/store/appStore";
-import SplashScreen from "@/components/SplashScreen";
-import { motion, AnimatePresence } from "framer-motion";
 
 const queryClient = new QueryClient();
 
@@ -35,85 +33,61 @@ function DarkModeInit() {
   return null;
 }
 
-const App = () => {
-  const [isLoaded, setIsLoaded] = useState(false);
+const App = () => (
+  <QueryClientProvider client={queryClient}>
+    <TooltipProvider>
+      <DarkModeInit />
+      <Sonner />
+      <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/" element={<Landing />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsLoaded(true);
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
+          {/* Protected dashboard routes */}
+          <Route
+            element={
+              <ProtectedRoute>
+                <DashboardLayout />
+              </ProtectedRoute>
+            }
+          >
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/process" element={<ProcessReport />} />
+            <Route path="/query" element={<QueryPage />} />
+            <Route path="/alerts" element={<AlertsPage />} />
+            <Route path="/summary" element={<SummaryPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/vault" element={<DataVault />} />
+            <Route path="/vault/details/:sessionId" element={<RecordDetailsPage />} />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute requireAdmin>
+                  <AdminPage />
+                </ProtectedRoute>
+              }
+            />
+          </Route>
 
-  return (
-    <AnimatePresence mode="wait">
-      {!isLoaded ? (
-        <motion.div
-          key="splash"
-          initial={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.5 }}
-          className="w-full h-full"
-        >
-          <TooltipProvider>
-            <DarkModeInit />
-            <SplashScreen />
-          </TooltipProvider>
-        </motion.div>
-      ) : (
-        <motion.div
-          key="app"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="w-full h-full"
-        >
-          <QueryClientProvider client={queryClient}>
-            <TooltipProvider>
-              <DarkModeInit />
-              <Sonner />
-              <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-                <Routes>
-                  {/* Public routes */}
-                  <Route path="/" element={<Landing />} />
-                  <Route path="/login" element={<LoginPage />} />
-                  <Route path="/register" element={<RegisterPage />} />
-                  <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          {/* Data entry portal: data_entry and admin roles */}
+          <Route
+            path="/data-entry"
+            element={
+              <ProtectedRoute allowedRoles={["data_entry", "admin"]}>
+                <DataEntryPage />
+              </ProtectedRoute>
+            }
+          />
 
-                  {/* Protected dashboard routes */}
-                  <Route element={
-                    <ProtectedRoute>
-                      <DashboardLayout />
-                    </ProtectedRoute>
-                  }>
-                    <Route path="/dashboard" element={<Dashboard />} />
-                    <Route path="/process" element={<ProcessReport />} />
-                    <Route path="/query" element={<QueryPage />} />
-                    <Route path="/alerts" element={<AlertsPage />} />
-                    <Route path="/summary" element={<SummaryPage />} />
-                    <Route path="/settings" element={<SettingsPage />} />
-                    <Route path="/profile" element={<ProfilePage />} />
-                    <Route path="/vault" element={<DataVault />} />
-                    <Route path="/vault/details/:sessionId" element={<RecordDetailsPage />} />
-                    <Route path="/admin" element={<AdminPage />} />
-                  </Route>
-
-                  {/* Data Entry Portal – restricted to data_entry and admin roles */}
-                  <Route path="/data-entry" element={
-                    <ProtectedRoute allowedRoles={['data_entry', 'admin']}>
-                      <DataEntryPage />
-                    </ProtectedRoute>
-                  } />
-
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </BrowserRouter>
-            </TooltipProvider>
-          </QueryClientProvider>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-};
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </BrowserRouter>
+    </TooltipProvider>
+  </QueryClientProvider>
+);
 
 export default App;

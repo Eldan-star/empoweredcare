@@ -1,358 +1,191 @@
-import { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
-import {
-  CheckCircle2, XCircle, AlertTriangle, MapPin, Users,
-  Clock, Shield, Activity, ChevronRight, Bell, BellOff,
-  Filter, ExternalLink, Zap
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { RiskBadge } from '@/components/RiskBadge';
-import { cn } from '@/lib/utils';
-import { useAppStore } from '@/store/appStore';
-import { api } from '@/lib/api';
-import { toast } from 'sonner';
-import EthiopiaMap from '@/components/EthiopiaMap';
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { ChevronDown } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAppStore } from "@/store/appStore";
+import { useAuthStore } from "@/store/authStore";
+import { api, apiErrorMessage } from "@/lib/api";
+import { toast } from "sonner";
+import { EmptyState, PageHeader, SectionRule, Stat, StatRow, TierBadge, formatDate } from "@/components/editorial";
+import { cn } from "@/lib/utils";
+
+const ORDER: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
+const FILTERS = [
+  { label: "All", value: null },
+  { label: "High", value: "HIGH" },
+  { label: "Medium", value: "MEDIUM" },
+  { label: "Low", value: "LOW" },
+] as const;
 
 export default function AlertsPage() {
-  const navigate = useNavigate();
-  const { reports, updateReportStatus, setReports } = useAppStore();
+  const { reports, updateReportStatus, setReports, addNotification } = useAppStore();
+  const isAdmin = useAuthStore((s) => s.user?.role === "admin");
   const [filterRisk, setFilterRisk] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [processing, setProcessing] = useState<string | null>(null);
 
   useEffect(() => {
-    api.getReports().then(setReports).catch(() => {});
+    api.getReports().then(setReports).catch(() => toast.error("Could not load records."));
   }, [setReports]);
 
-  const pending = reports
-    .filter(r => (r.status || 'pending') === 'pending')
-    .filter(r => !filterRisk || r.risk_analysis?.risk_level === filterRisk)
-    .sort((a, b) => {
-      const order: Record<string, number> = { HIGH: 3, MEDIUM: 2, LOW: 1 };
-      return (order[b.risk_analysis?.risk_level || 'LOW'] || 0) - (order[a.risk_analysis?.risk_level || 'LOW'] || 0);
-    });
+  const isPending = (r: (typeof reports)[number]) => (r.status || "pending") === "pending";
+  const queue = reports
+    .filter(isPending)
+    .filter((r) => !filterRisk || r.risk_analysis?.risk_level === filterRisk)
+    .sort((a, b) => (ORDER[b.risk_analysis?.risk_level || ""] || 0) - (ORDER[a.risk_analysis?.risk_level || ""] || 0));
+  const resolved = reports.filter((r) => !isPending(r));
+  const totalPending = reports.filter(isPending).length;
+  const highPending = reports.filter((r) => isPending(r) && r.risk_analysis?.risk_level === "HIGH").length;
 
-  const resolved = reports.filter(r => r.status && r.status !== 'pending');
-  const highCount = reports.filter(r => (r.status || 'pending') === 'pending' && r.risk_analysis?.risk_level === 'HIGH').length;
-  const totalPending = reports.filter(r => (r.status || 'pending') === 'pending').length;
-
-  const handle = async (id: string, approved: boolean) => {
+  const decide = async (id: string, approved: boolean) => {
     setProcessing(id);
     try {
       await api.approveReport(id, approved);
-      updateReportStatus(id, approved ? 'approved' : 'rejected');
-      toast.success(approved ? '✅ Alert verified and approved' : '🚫 Alert rejected');
+      updateReportStatus(id, approved ? "approved" : "rejected");
+      addNotification(`Record ${id.slice(0, 8)} ${approved ? "approved" : "rejected"}`);
+      toast.success(approved ? "Record approved" : "Record rejected");
       setExpandedId(null);
-    } catch {
-      toast.error('Failed to update alert status');
+    } catch (err) {
+      toast.error(apiErrorMessage(err, "Could not update the record."));
     } finally {
       setProcessing(null);
     }
   };
 
-  const riskColor = (level?: string) => {
-    if (level === 'HIGH') return 'border-l-red-500 bg-red-500/3';
-    if (level === 'MEDIUM') return 'border-l-amber-500 bg-amber-500/3';
-    return 'border-l-emerald-500 bg-emerald-500/3';
-  };
-
   return (
-    <div className="space-y-6 pb-12">
+    <div>
+      <PageHeader
+        kicker="Alert review"
+        title="Records awaiting a decision"
+        lede="Each record was extracted and rated by the language-model pipeline. Nothing counts as verified until an officer approves it."
+      />
 
-      {/* ── PAGE HEADER ─────────────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            {totalPending > 0
-              ? <Bell className="h-4 w-4 text-red-500 animate-bounce" />
-              : <BellOff className="h-4 w-4 text-muted-foreground" />}
-            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-muted-foreground">
-              Alert Review Queue
-            </span>
-          </div>
-          <h1 className="text-2xl font-black tracking-tight">Priority Validation Center</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">Review and approve outbreak alerts requiring manual verification</p>
-        </div>
+      <StatRow className="mb-10">
+        <Stat label="Awaiting review" value={totalPending} />
+        <Stat label="Rated high, pending" value={highPending} tone={highPending ? "red" : "default"} />
+        <Stat label="Decided" value={resolved.length} />
+        <Stat label="Approved" value={resolved.filter((r) => r.status === "approved").length} />
+      </StatRow>
 
-        {/* KPI badges */}
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className={cn('px-4 py-2 rounded-xl border flex items-center gap-2',
-            highCount > 0 ? 'bg-red-500/10 border-red-500/20' : 'bg-muted/30 border-border/40')}>
-            <AlertTriangle className={cn('h-4 w-4', highCount > 0 ? 'text-red-500' : 'text-muted-foreground')} />
-            <div>
-              <p className="text-[9px] font-black uppercase text-muted-foreground">Critical</p>
-              <p className={cn('text-xl font-black leading-none', highCount > 0 ? 'text-red-500' : 'text-foreground')}>{highCount}</p>
-            </div>
-          </div>
-          <div className="px-4 py-2 rounded-xl border border-border/40 bg-muted/30 flex items-center gap-2">
-            <Clock className="h-4 w-4 text-amber-500" />
-            <div>
-              <p className="text-[9px] font-black uppercase text-muted-foreground">Pending</p>
-              <p className="text-xl font-black leading-none text-amber-500">{totalPending}</p>
-            </div>
-          </div>
-          <div className="px-4 py-2 rounded-xl border border-border/40 bg-muted/30 flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-            <div>
-              <p className="text-[9px] font-black uppercase text-muted-foreground">Resolved</p>
-              <p className="text-xl font-black leading-none text-emerald-500">{resolved.length}</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      {!isAdmin && (
+        <p className="mb-8 border-l-2 border-foreground pl-3 text-sm text-muted-foreground">
+          You can read the queue. Approving or rejecting records requires an administrator account.
+        </p>
+      )}
 
-      {/* ── MAIN GRID ───────────────────────────── */}
-      <div className="grid lg:grid-cols-5 gap-6">
-
-        {/* Left: Alert Queue (3 cols) */}
-        <div className="lg:col-span-3 space-y-4">
-
-          {/* Filter bar */}
-          <div className="flex items-center gap-2">
-            <Filter className="h-3.5 w-3.5 text-muted-foreground" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground mr-1">Filter:</span>
-            {[
-              { label: 'All', value: null },
-              { label: '🔴 HIGH', value: 'HIGH' },
-              { label: '🟡 MEDIUM', value: 'MEDIUM' },
-              { label: '🟢 LOW', value: 'LOW' },
-            ].map(f => (
-              <button key={String(f.value)} onClick={() => setFilterRisk(f.value)}
-                className={cn('h-7 px-3 rounded-lg text-[10px] font-black uppercase border transition-all',
-                  filterRisk === f.value
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : 'bg-muted/30 text-muted-foreground border-border/40 hover:bg-muted/60')}>
+      <div className="grid lg:grid-cols-12 gap-x-10">
+        <SectionRule title="Queue" meta={`${queue.length} records · highest rated first`} className="lg:col-span-8">
+          <div className="flex flex-wrap gap-1 mb-4" role="group" aria-label="Filter by level">
+            {FILTERS.map((f) => (
+              <Button
+                key={f.label}
+                size="sm"
+                variant={filterRisk === f.value ? "default" : "outline"}
+                onClick={() => setFilterRisk(f.value)}
+                aria-pressed={filterRisk === f.value}
+              >
                 {f.label}
-              </button>
+              </Button>
             ))}
-            <span className="ml-auto text-[10px] font-bold text-muted-foreground">{pending.length} alerts</span>
           </div>
 
-          {/* Empty state */}
-          {pending.length === 0 && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="flex flex-col items-center gap-4 py-20 bg-background/70 border border-dashed border-border/50 rounded-2xl text-center">
-              <div className="h-14 w-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center">
-                <CheckCircle2 className="h-7 w-7 text-emerald-500" />
-              </div>
-              <div>
-                <p className="font-black text-base">All Clear</p>
-                <p className="text-sm text-muted-foreground mt-1">No pending alerts requiring review{filterRisk ? ` at ${filterRisk} risk` : ''}.</p>
-              </div>
-              {filterRisk && (
-                <button onClick={() => setFilterRisk(null)}
-                  className="text-xs font-bold text-primary hover:underline">Clear filter</button>
-              )}
-            </motion.div>
-          )}
+          {queue.length === 0 ? (
+            <EmptyState
+              title="Nothing waiting"
+              body={filterRisk ? `No pending records rated ${filterRisk.toLowerCase()}.` : "Every record has been reviewed."}
+              action={
+                filterRisk ? (
+                  <Button variant="outline" size="sm" onClick={() => setFilterRisk(null)}>
+                    Show all levels
+                  </Button>
+                ) : undefined
+              }
+            />
+          ) : (
+            <ol className="border-t border-border">
+              {queue.map((r) => {
+                const open = expandedId === r.session_id;
+                const busy = processing === r.session_id;
+                return (
+                  <li key={r.session_id} className="border-b border-border">
+                    <button
+                      className="w-full text-left py-4 grid grid-cols-[6.5rem_1fr_auto] gap-4 items-start hover:bg-muted/50 px-1"
+                      onClick={() => setExpandedId(open ? null : r.session_id)}
+                      aria-expanded={open}
+                    >
+                      <TierBadge level={r.risk_analysis?.risk_level || "UNKNOWN"} className="mt-1" />
+                      <span>
+                        <span className="block font-serif text-[1.0625rem] leading-snug">{r.alert?.title || "Untitled report"}</span>
+                        <span className="block text-xs text-muted-foreground mt-1">
+                          {r.extracted_data?.location || "Unknown location"} · <span className="num">{r.extracted_data?.cases ?? 0}</span> cases ·{" "}
+                          {r.risk_analysis?.possible_disease || "Unidentified"} · received {formatDate(r.created_at, true)}
+                        </span>
+                      </span>
+                      <ChevronDown className={cn("h-4 w-4 mt-1 text-muted-foreground transition-transform", open && "rotate-180")} />
+                    </button>
 
-          {/* Alert cards */}
-          <div className="space-y-3">
-            {pending.map((r, i) => {
-              const isExpanded = expandedId === r.session_id;
-              const isProcessing = processing === r.session_id;
-              return (
-                <motion.div key={r.session_id}
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.06 }}
-                  className={cn(
-                    'border-l-4 bg-background/70 border border-border/40 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all',
-                    riskColor(r.risk_analysis?.risk_level)
-                  )}>
-
-                  {/* Card header — always visible */}
-                  <div className="p-5 cursor-pointer" onClick={() => setExpandedId(isExpanded ? null : r.session_id)}>
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-2 flex-wrap">
-                          <RiskBadge level={r.risk_analysis?.risk_level || 'UNKNOWN'} />
-                          <span className="text-[9px] font-mono font-bold text-muted-foreground">
-                            #{r.session_id.slice(0, 8)}
-                          </span>
-                          {r.risk_analysis?.risk_level === 'HIGH' && (
-                            <span className="flex items-center gap-1 text-[9px] font-black uppercase text-red-500 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full">
-                              <Zap className="h-2.5 w-2.5" /> Urgent
-                            </span>
+                    {open && (
+                      <div className="pb-5 pl-1 md:pl-[7.5rem] pr-1 space-y-4 text-sm">
+                        {r.alert?.message && <p className="prose-brief text-[0.9375rem]">{r.alert.message}</p>}
+                        <dl className="grid sm:grid-cols-3 gap-4">
+                          <div>
+                            <dt className="label-caps">Classification</dt>
+                            <dd className="mt-1">{r.extracted_data?.classification || "Suspected"}</dd>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <dt className="label-caps">Clinical signs</dt>
+                            <dd className="mt-1">{r.extracted_data?.symptoms?.length ? r.extracted_data.symptoms.join(", ") : "None extracted"}</dd>
+                          </div>
+                        </dl>
+                        {r.risk_analysis?.reason && (
+                          <div>
+                            <p className="label-caps">Model reasoning (unverified)</p>
+                            <p className="mt-1 text-muted-foreground leading-relaxed">
+                              {r.risk_analysis.reason.length > 400 ? r.risk_analysis.reason.slice(0, 400) + "…" : r.risk_analysis.reason}
+                            </p>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          {isAdmin && (
+                            <>
+                              <Button size="sm" onClick={() => decide(r.session_id, true)} disabled={busy}>
+                                {busy ? "Saving…" : "Approve"}
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => decide(r.session_id, false)} disabled={busy}>
+                                Reject
+                              </Button>
+                            </>
                           )}
-                        </div>
-                        <h3 className="font-black text-base leading-tight text-foreground">
-                          {r.alert?.title || 'Unknown Outbreak Alert'}
-                        </h3>
-                        <div className="flex items-center gap-3 mt-2 flex-wrap">
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
-                            <MapPin className="h-3 w-3 text-primary" />
-                            {r.extracted_data?.location || 'Unknown'}
-                          </span>
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
-                            <Users className="h-3 w-3 text-primary" />
-                            {r.extracted_data?.cases || 0} cases
-                          </span>
-                          <span className="flex items-center gap-1 text-xs text-muted-foreground font-medium">
-                            <Clock className="h-3 w-3 text-primary" />
-                            {r.created_at ? new Date(r.created_at).toLocaleString() : 'Recently'}
-                          </span>
+                          <Link to={`/vault/details/${r.session_id}`} className="text-sm underline underline-offset-4 ml-1">
+                            Full record
+                          </Link>
                         </div>
                       </div>
-                      <ChevronRight className={cn('h-4 w-4 text-muted-foreground shrink-0 mt-1 transition-transform', isExpanded && 'rotate-90')} />
-                    </div>
-                  </div>
-
-                  {/* Expanded detail */}
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: 'auto' }}
-                        exit={{ opacity: 0, height: 0 }}
-                        className="overflow-hidden border-t border-border/30"
-                      >
-                        <div className="p-5 space-y-4 bg-muted/10">
-
-                          {/* Alert message */}
-                          {r.alert?.message && (
-                            <div className="p-3 bg-background rounded-xl border border-border/40">
-                              <p className="text-[9px] font-black uppercase text-muted-foreground mb-1">Alert Message</p>
-                              <p className="text-xs font-medium leading-relaxed text-foreground/80 italic">"{r.alert.message}"</p>
-                            </div>
-                          )}
-
-                          {/* Symptoms + Disease */}
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="p-3 bg-background rounded-xl border border-border/40">
-                              <p className="text-[9px] font-black uppercase text-muted-foreground mb-1.5">Detected Pathology</p>
-                              <p className="text-sm font-black text-primary">{r.risk_analysis?.possible_disease || 'Unidentified'}</p>
-                            </div>
-                            <div className="p-3 bg-background rounded-xl border border-border/40">
-                              <p className="text-[9px] font-black uppercase text-muted-foreground mb-1.5">Classification</p>
-                              <p className="text-sm font-bold">{r.extracted_data?.classification || 'Suspected'}</p>
-                            </div>
-                          </div>
-
-                          {/* Symptoms */}
-                          {r.extracted_data?.symptoms?.length > 0 && (
-                            <div>
-                              <p className="text-[9px] font-black uppercase text-muted-foreground mb-1.5">Clinical Signs</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {r.extracted_data.symptoms.map((s: string) => (
-                                  <span key={s} className="px-2.5 py-1 text-[10px] font-bold bg-background border border-border/50 rounded-lg">
-                                    {s}
-                                  </span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* AI Reason */}
-                          {r.risk_analysis?.reason && (
-                            <div className="p-3 bg-primary/5 border border-primary/10 rounded-xl">
-                              <p className="text-[9px] font-black uppercase text-muted-foreground mb-1 flex items-center gap-1">
-                                <Activity className="h-2.5 w-2.5 text-primary" /> AI Analysis
-                              </p>
-                              <p className="text-xs font-medium leading-relaxed text-foreground/80">
-                                {r.risk_analysis.reason.length > 200
-                                  ? r.risk_analysis.reason.slice(0, 200) + '…'
-                                  : r.risk_analysis.reason}
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-2 pt-1">
-                            <Button
-                              onClick={() => handle(r.session_id, true)}
-                              disabled={isProcessing}
-                              className="flex-1 h-10 rounded-xl font-black text-xs gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm">
-                              <CheckCircle2 className="h-4 w-4" />
-                              {isProcessing ? 'Processing...' : 'Approve & Verify'}
-                            </Button>
-                            <Button
-                              variant="outline"
-                              onClick={() => handle(r.session_id, false)}
-                              disabled={isProcessing}
-                              className="flex-1 h-10 rounded-xl font-black text-xs gap-2 border-red-500/30 text-red-600 hover:bg-red-500 hover:text-white hover:border-red-500 transition-all">
-                              <XCircle className="h-4 w-4" />
-                              Reject
-                            </Button>
-                            <button
-                              onClick={() => navigate(`/vault/details/${r.session_id}`)}
-                              className="h-10 w-10 rounded-xl border border-border/40 bg-muted/30 hover:bg-muted/60 flex items-center justify-center transition-colors"
-                              title="View full record">
-                              <ExternalLink className="h-4 w-4 text-muted-foreground" />
-                            </button>
-                          </div>
-                        </div>
-                      </motion.div>
                     )}
-                  </AnimatePresence>
-                </motion.div>
-              );
-            })}
-          </div>
-        </div>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </SectionRule>
 
-        {/* Right: Map + Archive (2 cols) */}
-        <div className="lg:col-span-2 space-y-6">
-
-          {/* Map */}
-          <div className="bg-background/70 border border-border/40 rounded-2xl overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2 px-5 py-4 border-b border-border/40 bg-muted/10">
-              <MapPin className="h-4 w-4 text-primary" />
-              <h2 className="text-xs font-black uppercase tracking-widest">Geospatial Distribution</h2>
-              <div className="ml-auto flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-                <span className="text-[9px] font-black uppercase text-muted-foreground">Live</span>
-              </div>
-            </div>
-            <EthiopiaMap />
-            <div className="px-5 py-3 border-t border-border/40 grid grid-cols-2 gap-3 bg-muted/5">
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground">Active Locations</p>
-                <p className="text-xl font-black text-foreground">{[...new Set(reports.map(r => r.extracted_data?.location))].filter(Boolean).length}</p>
-              </div>
-              <div>
-                <p className="text-[9px] font-black uppercase text-muted-foreground">Total Reports</p>
-                <p className="text-xl font-black text-foreground">{reports.length}</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Resolved archive */}
-          <div className="bg-background/70 border border-border/40 rounded-2xl overflow-hidden shadow-sm">
-            <div className="flex items-center gap-2 px-5 py-4 border-b border-border/40 bg-muted/10">
-              <Shield className="h-4 w-4 text-primary" />
-              <h2 className="text-xs font-black uppercase tracking-widest">Review History</h2>
-              <span className="ml-auto text-[9px] font-bold text-muted-foreground">{resolved.length} resolved</span>
-            </div>
-            <div className="p-4 space-y-2">
-              {resolved.length === 0 ? (
-                <p className="text-xs text-center text-muted-foreground italic py-6">No resolved alerts yet</p>
-              ) : resolved.slice(0, 8).map(r => (
-                <div key={r.session_id}
-                  onClick={() => navigate(`/vault/details/${r.session_id}`)}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted/40 transition-colors cursor-pointer group">
-                  <div className={cn('w-2 h-2 rounded-full shrink-0',
-                    r.status === 'approved' ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]' : 'bg-red-500 shadow-[0_0_6px_rgba(239,68,68,0.5)]')} />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs font-bold truncate group-hover:text-primary transition-colors">
-                      {r.alert?.title || 'System Log'}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{r.extracted_data?.location}</p>
-                  </div>
-                  <span className={cn(
-                    'text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest border shrink-0',
-                    r.status === 'approved'
-                      ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20'
-                      : 'bg-red-500/10 text-red-600 border-red-500/20'
-                  )}>
-                    {r.status}
-                  </span>
-                </div>
+        <SectionRule title="Recently decided" meta={`${resolved.length} total`} className="lg:col-span-4">
+          {resolved.length === 0 ? (
+            <p className="text-sm text-muted-foreground">No decisions yet.</p>
+          ) : (
+            <ul>
+              {resolved.slice(0, 10).map((r) => (
+                <li key={r.session_id} className="py-2.5 border-b border-border">
+                  <Link to={`/vault/details/${r.session_id}`} className="block group">
+                    <span className="label-caps text-[0.625rem]">{r.status}</span>
+                    <span className="block text-sm group-hover:underline underline-offset-2 mt-0.5">{r.alert?.title || "Untitled report"}</span>
+                    <span className="block text-xs text-muted-foreground">{r.extracted_data?.location}</span>
+                  </Link>
+                </li>
               ))}
-            </div>
-          </div>
-        </div>
+            </ul>
+          )}
+        </SectionRule>
       </div>
     </div>
   );

@@ -66,6 +66,8 @@ export interface OutbreakProcessResponse {
 export interface OutbreakReport extends OutbreakProcessResponse {
   status: 'pending' | 'approved' | 'rejected';
   created_at: string;
+  /** Last activity time; set by the backend when reports are merged. */
+  timestamp?: string;
   raw_report: string;
 }
 

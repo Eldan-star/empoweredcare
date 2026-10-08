@@ -1,33 +1,28 @@
-import { Link, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
-import {
-  LayoutDashboard,
-  FileText,
-  Search,
-  AlertTriangle,
-  BarChart3,
-  Settings,
-  Shield,
-  X,
-  ShieldCheck,
-  User,
-  Database,
-} from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/store/authStore';
+import { Link, useLocation } from "react-router-dom";
+import { X } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store/authStore";
 
-const baseNavItems = [
-  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/vault', icon: Database, label: 'Intelligence Vault' },
-  { to: '/process', icon: FileText, label: 'Process Report' },
-  { to: '/query', icon: Search, label: 'Query Data' },
-  { to: '/alerts', icon: AlertTriangle, label: 'Alerts' },
-  { to: '/summary', icon: BarChart3, label: 'Summary' },
+interface NavItem {
+  to: string;
+  label: string;
+}
+
+const surveillance: NavItem[] = [
+  { to: "/dashboard", label: "Overview" },
+  { to: "/alerts", label: "Alert review" },
+  { to: "/vault", label: "Records" },
+  { to: "/summary", label: "Weekly summary" },
 ];
 
-const bottomNavItems = [
-  { to: '/profile', icon: User, label: 'My Profile' },
-  { to: '/settings', icon: Settings, label: 'Settings' },
+const tools: NavItem[] = [
+  { to: "/process", label: "Submit a report" },
+  { to: "/query", label: "Ask the data" },
+];
+
+const account: NavItem[] = [
+  { to: "/profile", label: "Profile" },
+  { to: "/settings", label: "Settings" },
 ];
 
 interface Props {
@@ -35,107 +30,73 @@ interface Props {
   onClose: () => void;
 }
 
+function NavGroup({ title, items, pathname, onNavigate }: { title: string; items: NavItem[]; pathname: string; onNavigate: () => void }) {
+  return (
+    <div>
+      <p className="label-caps px-5 mb-2">{title}</p>
+      <ul>
+        {items.map((item) => {
+          const active = pathname === item.to || (item.to !== "/dashboard" && pathname.startsWith(item.to + "/"));
+          return (
+            <li key={item.to}>
+              <Link
+                to={item.to}
+                onClick={onNavigate}
+                aria-current={active ? "page" : undefined}
+                className={cn(
+                  "block px-5 py-1.5 text-[0.875rem] border-l-2 transition-colors",
+                  active
+                    ? "border-foreground font-medium text-foreground"
+                    : "border-transparent text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {item.label}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export function AppSidebar({ open, onClose }: Props) {
   const { pathname } = useLocation();
   const { user } = useAuthStore();
-
-  const navItems = [
-    ...baseNavItems,
-    ...(user?.role === 'admin'
-      ? [{ to: '/admin', icon: ShieldCheck, label: 'Admin Panel' }]
-      : []),
-  ];
+  const admin: NavItem[] = user?.role === "admin" ? [{ to: "/admin", label: "Administration" }] : [];
 
   return (
     <>
-      {open && (
-        <div className="fixed inset-0 bg-black/50 z-40 lg:hidden" onClick={onClose} />
-      )}
+      {open && <div className="fixed inset-0 z-40 bg-foreground/30 lg:hidden" onClick={onClose} aria-hidden />}
       <aside
         className={cn(
-          'fixed top-0 left-0 z-50 h-full w-72 bg-sidebar text-sidebar-foreground flex flex-col transition-all duration-500 lg:translate-x-0 lg:static lg:z-auto border-r border-sidebar-border/10 shadow-2xl lg:shadow-none',
-          open ? 'translate-x-0' : '-translate-x-full'
+          "fixed inset-y-0 left-0 z-50 w-60 shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col",
+          "transition-transform duration-200 lg:static lg:translate-x-0",
+          open ? "translate-x-0" : "-translate-x-full",
         )}
+        aria-label="Main navigation"
       >
-        <div className="flex items-center gap-3 px-7 py-8">
-          <div className="p-2 bg-gradient-to-br from-primary to-primary/80 rounded-xl shadow-lg shadow-primary/20">
-            <Shield className="h-6 w-6 text-primary-foreground" />
-          </div>
-          <div className="flex-1">
-            <h1 className="text-xl font-black tracking-tighter leading-none">EMPOWERED</h1>
-            <p className="text-[10px] font-bold text-sidebar-foreground/40 uppercase tracking-[0.2em] mt-1">Surveillance v2</p>
-          </div>
-          <button onClick={onClose} className="lg:hidden p-2 rounded-lg hover:bg-sidebar-accent text-sidebar-foreground/60 transition-colors">
-            <X className="h-5 w-5" />
+        <div className="px-5 pt-6 pb-5 border-b border-sidebar-border flex items-start justify-between">
+          <Link to="/dashboard" onClick={onClose} className="block">
+            <span className="block font-serif text-[1.375rem] leading-none">Empowered Care</span>
+            <span className="label-caps block mt-2 text-[0.625rem]">Outbreak intelligence · Ethiopia</span>
+          </Link>
+          <button onClick={onClose} className="lg:hidden -mr-2 p-2 text-muted-foreground hover:text-foreground" aria-label="Close navigation">
+            <X className="h-4 w-4" />
           </button>
         </div>
 
-        <nav className="flex-1 px-4 py-4 space-y-8 overflow-y-auto scrollbar-hide">
-          <div>
-            <p className="px-4 pb-4 text-[10px] font-black uppercase tracking-[0.3em] text-sidebar-foreground/20">Operations</p>
-            <div className="space-y-1">
-              {navItems.map((item) => {
-                const active = pathname === item.to;
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    onClick={onClose}
-                    className={cn(
-                      'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 relative group',
-                      active
-                        ? 'bg-primary text-primary-foreground shadow-lg shadow-primary/20 translate-x-1'
-                        : 'text-sidebar-foreground/50 hover:bg-sidebar-accent hover:text-sidebar-foreground hover:translate-x-1'
-                    )}
-                  >
-                    <item.icon className={cn("h-5 w-5 transition-transform duration-300 group-hover:scale-110", active ? "text-primary-foreground" : "text-sidebar-foreground/30")} />
-                    {item.label}
-                    {active && (
-                       <motion.div layoutId="activeNav" className="absolute left-0 w-1 h-6 bg-white rounded-full -ml-1" />
-                    )}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-
-          <div>
-            <p className="px-4 pb-4 text-[10px] font-black uppercase tracking-[0.3em] text-sidebar-foreground/20">Terminal</p>
-            <div className="space-y-1">
-              {bottomNavItems.map((item) => {
-                const active = pathname === item.to;
-                return (
-                  <Link
-                    key={item.to}
-                    to={item.to}
-                    onClick={onClose}
-                    className={cn(
-                      'flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-bold transition-all duration-300 group',
-                      active
-                        ? 'bg-sidebar-accent text-sidebar-foreground shadow-inner'
-                        : 'text-sidebar-foreground/50 hover:bg-sidebar-accent/50 hover:text-sidebar-foreground hover:translate-x-1'
-                    )}
-                  >
-                    <item.icon className={cn("h-5 w-5 transition-colors", active ? "text-primary" : "text-sidebar-foreground/20")} />
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
+        <nav className="flex-1 overflow-y-auto py-6 space-y-7">
+          <NavGroup title="Surveillance" items={surveillance} pathname={pathname} onNavigate={onClose} />
+          <NavGroup title="Tools" items={tools} pathname={pathname} onNavigate={onClose} />
+          <NavGroup title="Account" items={[...account, ...admin]} pathname={pathname} onNavigate={onClose} />
         </nav>
 
-        {/* User Card at Bottom */}
-        <div className="p-4 border-t border-sidebar-border/10 bg-black/10">
-          <div className="flex items-center gap-3 p-3 rounded-2xl bg-sidebar-accent/30 border border-sidebar-border/5">
-             <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center font-black text-white text-xs">
-                {user?.full_name?.split(' ').map(n => n[0]).join('') || 'U'}
-             </div>
-             <div className="flex-1 min-w-0">
-                <p className="text-xs font-black truncate uppercase tracking-tighter">{user?.full_name || 'System User'}</p>
-                <p className="text-[9px] font-bold text-sidebar-foreground/40 uppercase tracking-widest leading-none mt-0.5">{user?.role || 'Guest'}</p>
-             </div>
-          </div>
+        <div className="px-5 py-4 border-t border-sidebar-border">
+          <p className="text-[0.8125rem] truncate">{user?.full_name || user?.email || "Signed in"}</p>
+          <p className="label-caps text-[0.625rem] mt-1">
+            {user?.role === "admin" ? "Administrator" : user?.role === "data_entry" ? "Data entry" : "Viewer"}
+          </p>
         </div>
       </aside>
     </>
