@@ -55,9 +55,9 @@ LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
 # Gemini AI Settings
+# Comma-separated in .env, tried in order. Run `python list_models.py` to see what your key can use.
 GEMINI_MODEL_PREFERENCES = [
-    'gemini-3-flash-preview'
-
+    m.strip() for m in os.getenv("GEMINI_MODELS", "gemini-3.8-flash").split(",") if m.strip()
 ]
 
 # Validation Settings

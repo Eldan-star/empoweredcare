@@ -51,6 +51,7 @@ Today nothing uses a real database. Everything is saved in plain JSON text files
 This file reads settings from a `.env` file, which holds secrets that never go into git. Copy `.env.example` to `.env` to get one. Key settings:
 - `SECRET_KEY` signs login tokens (explained in 3b). If it changes, everyone is logged out. Outside `APP_ENV=development` it **must** be set, or the server refuses to start. That is deliberate: in development, a missing key falls back to a random throwaway key.
 - `GEMINI_API_KEY` is the key for Google's AI.
+- `GEMINI_MODELS` lists which Gemini models to use, tried in order. Google retires models regularly; when that happens you change this line, not the code. `python list_models.py` shows the names your key can use.
 - `LLM_PROVIDER` picks the AI model: `gemini` (the default) or `claude`.
 - `ALLOWED_ORIGINS` lists which website addresses may talk to the backend. Browsers enforce this rule, which is called **CORS**.
 - `MAX_TEXT_LENGTH` is the longest report text accepted (20,000 characters by default).
@@ -108,7 +109,8 @@ The agents used to call Gemini directly. Now they call a small common interface 
 `GeminiProvider` and `ClaudeProvider` both implement it, and `LLM_PROVIDER` in `.env` picks one. This makes it a one-line settings change to compare models, or to replace one later. Reading images is still Gemini-only, through `gemini_service.py`.
 
 ### The other services
-- `gemini_service.py`: the Gemini connection, including retries and switching to another Gemini model if one fails.
+- `gemini_service.py`: the Gemini connection, using Google's current `google-genai` library. It waits and retries when Google says "too many requests" (error 429), and moves to the next model in `GEMINI_MODELS` if one fails.
+- `scripts/reprocess_failed.py`: a one-off tool that re-runs stored records whose AI analysis failed and replaces the failed analysis in place.
 - `email_service.py`: sends invite and reset emails. It needs the SMTP settings in `.env` (SMTP is the standard for sending email).
 - `ocr_engine.py`, `layout_detector.py`, `preprocessor.py`, `structurer.py`: the scanned-document pipeline behind `/process`. These are heavy, so they only load the first time `/process` is used.
 - `research_agent.py`: web scraping, which is switched off.

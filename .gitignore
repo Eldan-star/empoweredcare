@@ -233,3 +233,6 @@ node_modules
 # Local data (example templates are tracked instead)
 models/users.json
 data/patient_records.json
+
+# Backups written by scripts/reprocess_failed.py
+models/outbreak_data.backup-*.json

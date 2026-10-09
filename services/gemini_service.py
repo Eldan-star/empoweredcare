@@ -1,7 +1,8 @@
 import os
 import time
 import PIL.Image
-import google.generativeai as genai
+from google import genai
+from google.genai import errors as genai_errors
 import json
 import io
 from pathlib import Path
@@ -17,10 +18,21 @@ class GeminiService:
         if not self.api_key:
             raise ValueError("❌ GEMINI_API_KEY not found in .env file")
         
-        genai.configure(api_key=self.api_key)
+        self.client = genai.Client(api_key=self.api_key)
 
-        # Using currently supported active models
-        self.models = ['gemini-2.5-flash', 'gemini-2.0-flash']
+        # Tried in order; set GEMINI_MODELS in .env when Google retires a model.
+        self.models = GEMINI_MODEL_PREFERENCES
+
+    def _generate(self, model_name: str, contents) -> str:
+        """One generate_content call; returns the reply text or raises."""
+        response = self.client.models.generate_content(model=model_name, contents=contents)
+        if not response.text:
+            raise ValueError("Empty response")
+        return response.text
+
+    @staticmethod
+    def _is_rate_limit(e: Exception) -> bool:
+        return (isinstance(e, genai_errors.APIError) and e.code == 429) or "429" in str(e)
 
     def process_medical_record(self, image_path) -> StructuredMedicalRecord:
         img = PIL.Image.open(image_path)
@@ -64,17 +76,7 @@ class GeminiService:
             for attempt in range(2): # Try to retry if rate limit is encountered
                 try:
                     print(f"🧠 Universal Scan: Using {model_name}...")
-                    model = genai.GenerativeModel(model_name)
-                    response = model.generate_content([prompt, img])
-                    
-                    # Check response text
-                    if not response or not hasattr(response, 'text'):
-                         if response.candidates:
-                             raw_text = response.candidates[0].content.parts[0].text
-                         else:
-                             raise ValueError("Empty response")
-                    else:
-                        raw_text = response.text
+                    raw_text = self._generate(model_name, [prompt, img])
                     
                     print(f"\n📂 UNIVERSAL VISION RESULT:\n{raw_text}\n--------------------------\n")
 
@@ -109,7 +111,7 @@ class GeminiService:
                 except Exception as e:
                     print(f"⚠️ {model_name} Error (Attempt {attempt+1}): {e}")
                     last_error = e
-                    if "429" in str(e):
+                    if self._is_rate_limit(e):
                         print("⏳ 429 Rate limit encountered. Pausing for 35 seconds...")
                         time.sleep(35)
                     else:
@@ -125,16 +127,7 @@ class GeminiService:
             for attempt in range(2):
                 try:
                     print(f"🧠 Text Generation: Using {model_name}...")
-                    model = genai.GenerativeModel(model_name)
-                    response = model.generate_content(prompt)
-                    
-                    if not response or not hasattr(response, 'text'):
-                        if response.candidates:
-                            raw_text = response.candidates[0].content.parts[0].text
-                        else:
-                            raise ValueError("Empty response")
-                    else:
-                        raw_text = response.text
+                    raw_text = self._generate(model_name, prompt)
                     
                     if "```json" in raw_text:
                         json_text = raw_text.split("```json")[1].split("```")[0].strip()
@@ -148,7 +141,7 @@ class GeminiService:
                 except Exception as e:
                     print(f"⚠️ {model_name} Error (Attempt {attempt+1}): {e}")
                     last_error = e
-                    if "429" in str(e):
+                    if self._is_rate_limit(e):
                         print("⏳ 429 Rate limit encountered. Pausing for 35 seconds...")
                         time.sleep(35)
                     else:
@@ -169,23 +162,14 @@ class GeminiService:
             for attempt in range(2):
                 try:
                     print(f"🧠 Vision Scan: Using {model_name}...")
-                    model = genai.GenerativeModel(model_name)
-                    response = model.generate_content([prompt, img])
-                    
-                    if not response or not hasattr(response, 'text'):
-                         if response.candidates:
-                             raw_text = response.candidates[0].content.parts[0].text
-                         else:
-                             raise ValueError("Empty response")
-                    else:
-                        raw_text = response.text
+                    raw_text = self._generate(model_name, [prompt, img])
                     
                     return raw_text.strip()
                     
                 except Exception as e:
                     print(f"⚠️ {model_name} Vision Error (Attempt {attempt+1}): {e}")
                     last_error = e
-                    if "429" in str(e):
+                    if self._is_rate_limit(e):
                         print("⏳ 429 Rate limit encountered. Pausing for 35 seconds...")
                         time.sleep(35)
                     else:

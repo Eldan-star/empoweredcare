@@ -41,7 +41,7 @@ Tick the boxes as you go. If anything fails, copy the error text, or take a scre
      ```
      Your prompt should now start with `(.venv)`. If it doesn't, stop: pip would install into your computer's main Python instead. Then, on any system:
      ```
-     pip install fastapi==0.115.0 "uvicorn[standard]==0.30.6" python-multipart==0.0.9 python-jose==3.5.0 passlib==1.7.4 bcrypt==4.0.1 python-dotenv==1.0.1 google-generativeai==0.8.6 pydantic==2.12.5 email-validator==2.3.0 APScheduler==3.11.2 aiosmtplib==5.1.0 pandas numpy==1.26.4 opencv-python-headless==4.11.0.86 pdf2image==1.17.0 pillow==10.4.0 openpyxl==3.1.5 aiofiles
+     pip install fastapi==0.115.0 "uvicorn[standard]==0.30.6" python-multipart==0.0.9 python-jose==3.5.0 passlib==1.7.4 bcrypt==4.0.1 python-dotenv==1.0.1 google-genai==2.29.0 pydantic==2.12.5 email-validator==2.3.0 APScheduler==3.11.2 aiosmtplib==5.1.0 pandas numpy==1.26.4 opencv-python-headless==4.11.0.86 pdf2image==1.17.0 pillow==10.4.0 openpyxl==3.1.5 aiofiles
      ```
    - **Full install:** `pip install -r requirements.txt`. This pulls in PyTorch and NVIDIA GPU packages (several GB), and **those packages won't install on a Mac**.
    - For **PDF uploads** you also need Poppler, a PDF tool installed outside Python:

@@ -75,7 +75,11 @@ export function Transcript({
 }) {
   const end = useRef<HTMLDivElement>(null);
   const [copied, setCopied] = useState<number | null>(null);
-  useEffect(() => end.current?.scrollIntoView({ block: "end" }), [messages, loading]);
+  useEffect(() => {
+    // Braces matter: newer browsers return a Promise from scrollIntoView, and React
+    // would treat a returned value as a cleanup function.
+    end.current?.scrollIntoView({ block: "end" });
+  }, [messages, loading]);
 
   if (!messages.length && !loading) {
     return (
