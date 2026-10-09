@@ -1,5 +1,6 @@
 import os
 import time
+import httpx
 import PIL.Image
 from google import genai
 from google.genai import errors as genai_errors
@@ -11,6 +12,10 @@ from models.schemas import StructuredMedicalRecord, Medication
 from config import GEMINI_MODEL_PREFERENCES
 
 load_dotenv()
+
+# Overload / server-side hiccups that usually clear within seconds.
+TEMPORARY_STATUS_CODES = {500, 502, 503, 504}
+MAX_ATTEMPTS_PER_MODEL = 4
 
 class GeminiService:
     def __init__(self):
@@ -33,6 +38,48 @@ class GeminiService:
     @staticmethod
     def _is_rate_limit(e: Exception) -> bool:
         return (isinstance(e, genai_errors.APIError) and e.code == 429) or "429" in str(e)
+
+    @staticmethod
+    def _is_temporary(e: Exception) -> bool:
+        """Overload or dropped connection: worth retrying the same model."""
+        if isinstance(e, genai_errors.APIError):
+            return e.code in TEMPORARY_STATUS_CODES
+        return isinstance(e, httpx.TransportError)
+
+    def _call(self, contents, label: str, parse=lambda text: text):
+        """
+        Try each model in GEMINI_MODELS in order. On the same model, retry a 429 after
+        35 s and a temporary error (503, dropped connection, ...) after 2, 4, then 8 s.
+        Any other error, including a bad reply that `parse` rejects, moves to the next model.
+        """
+        last_error = None
+        for model_name in self.models:
+            for attempt in range(MAX_ATTEMPTS_PER_MODEL):
+                try:
+                    print(f"🧠 {label}: Using {model_name}...")
+                    return parse(self._generate(model_name, contents))
+                except Exception as e:
+                    print(f"⚠️ {model_name} {label} error (attempt {attempt + 1}): {e}")
+                    last_error = e
+                    last_attempt = attempt == MAX_ATTEMPTS_PER_MODEL - 1
+                    if self._is_rate_limit(e) and not last_attempt:
+                        print("⏳ 429 Rate limit encountered. Pausing for 35 seconds...")
+                        time.sleep(35)
+                    elif self._is_temporary(e) and not last_attempt:
+                        wait = 2 ** (attempt + 1)
+                        print(f"⏳ Gemini is busy or the connection dropped. Retrying in {wait} seconds...")
+                        time.sleep(wait)
+                    else:
+                        break
+        raise ValueError(f"❌ Gemini {label.lower()} failed: {last_error}")
+
+    @staticmethod
+    def _strip_fences(raw_text: str) -> str:
+        if "```json" in raw_text:
+            return raw_text.split("```json")[1].split("```")[0].strip()
+        if "```" in raw_text:
+            return raw_text.split("```")[1].split("```")[0].strip()
+        return raw_text.strip()
 
     def process_medical_record(self, image_path) -> StructuredMedicalRecord:
         img = PIL.Image.open(image_path)
@@ -71,84 +118,33 @@ class GeminiService:
         }
         """
 
-        last_error = None
-        for model_name in self.models:
-            for attempt in range(2): # Try to retry if rate limit is encountered
-                try:
-                    print(f"🧠 Universal Scan: Using {model_name}...")
-                    raw_text = self._generate(model_name, [prompt, img])
-                    
-                    print(f"\n📂 UNIVERSAL VISION RESULT:\n{raw_text}\n--------------------------\n")
+        def to_record(raw_text: str) -> StructuredMedicalRecord:
+            print(f"\n📂 UNIVERSAL VISION RESULT:\n{raw_text}\n--------------------------\n")
+            data = json.loads(self._strip_fences(raw_text))
+            return StructuredMedicalRecord(
+                document_type=data.get("document_type", "Medical Record"),
+                patient_name=data.get("patient_name", "Unknown"),
+                patient_id=data.get("patient_id"),
+                date_of_birth=data.get("date_of_birth"),
+                gender=data.get("gender"),
+                visit_date=data.get("visit_date"),
+                referred_from=data.get("referred_from"),
+                referred_to=data.get("referred_to"),
+                diagnosis=data.get("diagnosis", []),
+                symptoms=data.get("symptoms", []),
+                investigations=data.get("investigations", []),
+                medications=[Medication(**m) for m in data.get("medications", [])],
+                allergies=data.get("allergies", []),
+                notes=data.get("notes", ""),
+                additional_info=data.get("additional_info", {}),
+                confidence=float(data.get("confidence", 0.99))
+            )
 
-                    if "```json" in raw_text:
-                        json_text = raw_text.split("```json")[1].split("```")[0].strip()
-                    elif "```" in raw_text:
-                        json_text = raw_text.split("```")[1].split("```")[0].strip()
-                    else:
-                        json_text = raw_text.strip()
-                    
-                    data = json.loads(json_text)
-                    
-                    return StructuredMedicalRecord(
-                        document_type=data.get("document_type", "Medical Record"),
-                        patient_name=data.get("patient_name", "Unknown"),
-                        patient_id=data.get("patient_id"),
-                        date_of_birth=data.get("date_of_birth"),
-                        gender=data.get("gender"),
-                        visit_date=data.get("visit_date"),
-                        referred_from=data.get("referred_from"),
-                        referred_to=data.get("referred_to"),
-                        diagnosis=data.get("diagnosis", []),
-                        symptoms=data.get("symptoms", []),
-                        investigations=data.get("investigations", []),
-                        medications=[Medication(**m) for m in data.get("medications", [])],
-                        allergies=data.get("allergies", []),
-                        notes=data.get("notes", ""),
-                        additional_info=data.get("additional_info", {}),
-                        confidence=float(data.get("confidence", 0.99))
-                    )
-
-                except Exception as e:
-                    print(f"⚠️ {model_name} Error (Attempt {attempt+1}): {e}")
-                    last_error = e
-                    if self._is_rate_limit(e):
-                        print("⏳ 429 Rate limit encountered. Pausing for 35 seconds...")
-                        time.sleep(35)
-                    else:
-                        break # Stop trying with the current model for non-rate-limit errors
-            continue # Attempt the next model in the list
-            
-        raise ValueError(f"❌ Gemini failed with all models: {last_error}")
+        return self._call([prompt, img], "Universal Scan", parse=to_record)
 
     def generate_text(self, prompt: str) -> str:
         """Generate text response using Gemini for text-only prompts."""
-        last_error = None
-        for model_name in self.models:
-            for attempt in range(2):
-                try:
-                    print(f"🧠 Text Generation: Using {model_name}...")
-                    raw_text = self._generate(model_name, prompt)
-                    
-                    if "```json" in raw_text:
-                        json_text = raw_text.split("```json")[1].split("```")[0].strip()
-                    elif "```" in raw_text:
-                        json_text = raw_text.split("```")[1].split("```")[0].strip()
-                    else:
-                        json_text = raw_text.strip()
-                    
-                    return json_text
-                    
-                except Exception as e:
-                    print(f"⚠️ {model_name} Error (Attempt {attempt+1}): {e}")
-                    last_error = e
-                    if self._is_rate_limit(e):
-                        print("⏳ 429 Rate limit encountered. Pausing for 35 seconds...")
-                        time.sleep(35)
-                    else:
-                        break
-            continue
-            
-        raise ValueError(f"❌ Gemini text generation failed: {last_error}")
+        return self._call(prompt, "Text Generation", parse=self._strip_fences)
 
     def generate_vision_text(self, image_path_or_bytes, prompt: str) -> str:
         """Extract text from an image using Gemini Vision."""
@@ -157,23 +153,4 @@ class GeminiService:
         else:
             img = PIL.Image.open(io.BytesIO(image_path_or_bytes))
             
-        last_error = None
-        for model_name in self.models:
-            for attempt in range(2):
-                try:
-                    print(f"🧠 Vision Scan: Using {model_name}...")
-                    raw_text = self._generate(model_name, [prompt, img])
-                    
-                    return raw_text.strip()
-                    
-                except Exception as e:
-                    print(f"⚠️ {model_name} Vision Error (Attempt {attempt+1}): {e}")
-                    last_error = e
-                    if self._is_rate_limit(e):
-                        print("⏳ 429 Rate limit encountered. Pausing for 35 seconds...")
-                        time.sleep(35)
-                    else:
-                        break
-            continue
-            
-        raise ValueError(f"❌ Gemini Vision failed: {last_error}")
+        return self._call([prompt, img], "Vision Scan", parse=str.strip)

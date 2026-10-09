@@ -34,6 +34,7 @@ FAILURE_MARKERS = (
     "Analysis failed",
     "generation failed",
     "Gemini failed",
+    "scan failed",
     "cognitive engine",
     "is no longer available",
     "is not found for API version",

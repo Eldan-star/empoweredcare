@@ -109,7 +109,7 @@ The agents used to call Gemini directly. Now they call a small common interface 
 `GeminiProvider` and `ClaudeProvider` both implement it, and `LLM_PROVIDER` in `.env` picks one. This makes it a one-line settings change to compare models, or to replace one later. Reading images is still Gemini-only, through `gemini_service.py`.
 
 ### The other services
-- `gemini_service.py`: the Gemini connection, using Google's current `google-genai` library. It waits and retries when Google says "too many requests" (error 429), and moves to the next model in `GEMINI_MODELS` if one fails.
+- `gemini_service.py`: the Gemini connection, using Google's current `google-genai` library. When Google is busy (error 503) or the connection drops, it retries the same model after 2, 4 and 8 seconds; on "too many requests" (error 429) it waits 35 seconds. Then it moves to the next model in `GEMINI_MODELS`. Real errors, such as a bad key or a retired model, skip the retries.
 - `scripts/reprocess_failed.py`: a one-off tool that re-runs stored records whose AI analysis failed and replaces the failed analysis in place.
 - `email_service.py`: sends invite and reset emails. It needs the SMTP settings in `.env` (SMTP is the standard for sending email).
 - `ocr_engine.py`, `layout_detector.py`, `preprocessor.py`, `structurer.py`: the scanned-document pipeline behind `/process`. These are heavy, so they only load the first time `/process` is used.
