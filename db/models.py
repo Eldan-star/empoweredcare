@@ -86,7 +86,11 @@ class BoundaryCrosswalk(Base):
 # --- Routine data ----------------------------------------------------------------
 
 class IndicatorCount(Base):
-    """Weekly counts for one disease in one unit (PHEM weekly reporting)."""
+    """Weekly counts for one disease in one unit (PHEM weekly reporting, Monday-Sunday).
+
+    NULL and 0 mean different things. PHEM requires a zero to be written when no case was
+    seen, so 0 is a report of no cases and NULL is no report. A unit that keeps sending
+    NULL is "surveillance silent", never "no cases"."""
 
     __tablename__ = "indicator_counts"
     __table_args__ = (UniqueConstraint("pcode", "disease", "iso_year", "iso_week", "source"),)
@@ -97,10 +101,13 @@ class IndicatorCount(Base):
     iso_year: Mapped[int] = mapped_column(Integer)
     iso_week: Mapped[int] = mapped_column(Integer)
     suspected: Mapped[Optional[int]] = mapped_column(Integer)
-    confirmed: Mapped[Optional[int]] = mapped_column(Integer)  # e.g. measles IgM positive
+    # Confirmed per the EPHI standard case definition: laboratory (e.g. measles IgM+) OR
+    # epidemiologically linked to a confirmed case (PHEM Guideline 2022, Annex 5).
+    confirmed: Mapped[Optional[int]] = mapped_column(Integer)
     deaths: Mapped[Optional[int]] = mapped_column(Integer)
     reports_expected: Mapped[Optional[int]] = mapped_column(Integer)
     reports_received: Mapped[Optional[int]] = mapped_column(Integer)
+    reports_on_time: Mapped[Optional[int]] = mapped_column(Integer)  # timeliness (PHEM 2022 p. 74)
     source: Mapped[str] = mapped_column(String(50), default="dhis2")  # dhis2 | simulated | manual
     reported_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
@@ -153,7 +160,13 @@ class Signal(TimestampMixin, Base):
     location_text: Mapped[Optional[str]] = mapped_column(String(300))
     disease: Mapped[Optional[str]] = mapped_column(String(100))
     cases: Mapped[Optional[int]] = mapped_column(Integer)
-    classification: Mapped[Optional[str]] = mapped_column(String(20))  # Suspected | Probable | Confirmed
+    # EPHI final classification: suspected | lab_confirmed | epi_linked |
+    # clinically_compatible | discarded. Older records may hold Suspected/Probable/Confirmed.
+    classification: Mapped[Optional[str]] = mapped_column(String(30))
+    # Community signals are syndromes ("fever and rash"), not diseases; candidates list the
+    # diseases the syndrome can mean (CEBS Manual 2021, p. 4-6).
+    syndrome: Mapped[Optional[str]] = mapped_column(String(100))
+    candidate_diseases: Mapped[list[Any]] = mapped_column(default=list)
     # Extraction output as returned to the frontend (location, symptoms, cases, date, ...).
     extracted: Mapped[dict[str, Any]] = mapped_column(default=dict)
     # Language-model output: validation, risk opinions, consensus, alert, context research.
@@ -170,10 +183,19 @@ class Signal(TimestampMixin, Base):
     reviewed_by: Mapped[Optional[str]] = mapped_column(String(200))
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     submitted_by: Mapped[Optional[str]] = mapped_column(String(200))
+    # Timeline from the health-post rumour log book (PHEM Guideline 2022, Annex 12), so that
+    # CEBS timeliness indicators (notified within 1 hour, verified within 24 hours) compute.
+    onset_date: Mapped[Optional[date]] = mapped_column(Date)
+    seen_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    notified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    verification_result: Mapped[Optional[str]] = mapped_column(String(20))  # verified | ruled_out
+    investigated_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    intervention_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
 class Alert(TimestampMixin, Base):
-    """A tiered alert for one unit, disease and week (fusion ladder, M5)."""
+    """One alert for a unit, disease and week, at an EPHI level (SYSTEM_SPEC section 8)."""
 
     __tablename__ = "alerts"
 
@@ -182,7 +204,8 @@ class Alert(TimestampMixin, Base):
     disease: Mapped[str] = mapped_column(String(50))
     iso_year: Mapped[int] = mapped_column(Integer)
     iso_week: Mapped[int] = mapped_column(Integer)
-    tier: Mapped[str] = mapped_column(String(10), index=True)  # RED | ORANGE | YELLOW
+    level: Mapped[str] = mapped_column(String(10), index=True)  # action | alert | signal
+    priority: Mapped[Optional[float]] = mapped_column(Float)  # ordering within a level, 0-100
     evidence: Mapped[dict[str, Any]] = mapped_column(default=dict)
     status: Mapped[str] = mapped_column(String(20), default="open")  # open | verified | dismissed | closed
     verdict: Mapped[Optional[str]] = mapped_column(String(20))
