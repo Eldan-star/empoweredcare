@@ -20,7 +20,7 @@ from apscheduler.triggers.cron import CronTrigger
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, status, Security
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from models.schemas import (
     OutbreakProcessResponse, QueryResponse, ChatRequest, ChatResponse,
@@ -29,7 +29,7 @@ from models.schemas import (
     ProcessResponse, Detection,
     PatientRecord, PatientRecordResponse, VitalSigns
 )
-from services.gemini_service import GeminiService
+from services.gemini_service import GeminiService, AIQuotaExhausted
 from services.llm import get_llm
 from services.agents import (
     SuperAgent, DataAssistantAgent, ChatSupervisor,
@@ -99,6 +99,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.exception_handler(AIQuotaExhausted)
+async def ai_quota_exhausted(request, exc: AIQuotaExhausted):
+    """Quota limits are temporary: answer 503 with a plain message instead of a generic 500."""
+    logger.warning(f"⏳ {exc}")
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 # Initialize core services
 logger.info("🔧 Initializing Core Services...")
@@ -206,6 +213,8 @@ async def manual_analysis(admin: dict = Depends(get_current_admin)):
             "timestamp": str(datetime.now()),
             "result": result
         }
+    except AIQuotaExhausted:
+        raise
     except Exception as e:
         logger.error(f"❌ Manual analysis failed: {e}")
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
@@ -564,6 +573,8 @@ async def process_outbreak_report(
         logger.info(f"--- ✅ Outbreak Processing Complete: {len(response_list)} records ({processing_time:.2f}s) ---")
 
         return response_list
+    except AIQuotaExhausted:
+        raise
     except Exception as e:
         logger.error(f"❌ Processing error: {e}")
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
@@ -599,13 +610,13 @@ async def upload_outbreak_file(
             prompt = "Extract all text from this medical/epidemiological report page. Return ONLY the text."
             for img_np in images:
                 _, img_encoded = cv2.imencode('.jpg', img_np)
-                text = gemini_service.generate_vision_text(img_encoded.tobytes(), prompt)
+                text = await asyncio.to_thread(gemini_service.generate_vision_text, img_encoded.tobytes(), prompt)
                 all_text.append(text)
             extracted_text = "\n".join(all_text)
             
         elif content_type.startswith("image/") or filename.endswith((".jpg", ".jpeg", ".png")):
             prompt = "Extract all text from this medical note/report. Return ONLY the text."
-            extracted_text = gemini_service.generate_vision_text(content, prompt)
+            extracted_text = await asyncio.to_thread(gemini_service.generate_vision_text, content, prompt)
             
         else:
             extracted_text = content.decode("utf-8", errors="ignore")
@@ -653,6 +664,8 @@ async def upload_outbreak_file(
         processing_time = (datetime.now() - start_time).total_seconds()
         return response_list
 
+    except (AIQuotaExhausted, HTTPException):
+        raise
     except Exception as e:
         logger.error(f"❌ File processing failed: {e}")
         raise HTTPException(status_code=500, detail=f"File processing failed: {str(e)}")
@@ -696,6 +709,8 @@ async def query_outbreak_data(
     try:
         result = await data_assistant.query(query)
         return QueryResponse(**result)
+    except AIQuotaExhausted:
+        raise
     except Exception as e:
         logger.error(f"❌ Query error: {e}")
         raise HTTPException(status_code=500, detail=f"Query failed: {str(e)}")
@@ -735,6 +750,8 @@ async def chat_with_assistant(
     try:
         result = await chat_supervisor.chat(request.message, request.session_id)
         return ChatResponse(**result)
+    except AIQuotaExhausted:
+        raise
     except Exception as e:
         logger.error(f"❌ Chat error: {e}")
         raise HTTPException(status_code=500, detail=f"Chat failed: {str(e)}")

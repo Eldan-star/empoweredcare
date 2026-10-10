@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Union
 from models.schemas import OutbreakReport, ValidationResult, RiskAnalysis, AlertMessage, ConsensusResult, ContextData
-from services.gemini_service import GeminiService
+from services.gemini_service import GeminiService, AIQuotaExhausted
 from config import VALID_SYMPTOMS, MAX_STORED_REPORTS, BASE_DIR, ENABLE_WEB_RESEARCH
 
 # Configure logging
@@ -101,6 +101,8 @@ class ExtractionAgent:
             logger.info(f"Successfully extracted {len(reports)} records")
             return reports
 
+        except AIQuotaExhausted:
+            raise  # surfaced to the user as 'AI quota reached', not stored as an analysis
         except Exception as e:
             logger.error(f"Extraction failed: {e}")
             return [OutbreakReport(
@@ -158,6 +160,8 @@ class ValidationAgent:
                 confidence=data.get("confidence", 0.7),
                 issues=data.get("issues", [])
             )
+        except AIQuotaExhausted:
+            raise  # surfaced to the user as 'AI quota reached', not stored as an analysis
         except Exception as e:
             logger.error(f"AI validation failed: {e}")
             return ValidationResult(valid=True, confidence=0.5, issues=["Validation engine failure, defaulting to valid"])
@@ -166,10 +170,8 @@ class RiskAnalysisAgent:
     def __init__(self, gemini_service: GeminiService):
         self.gemini = gemini_service
 
-    async def analyze_risk(self, report: OutbreakReport, perspective: str = "general", context: ContextData = None, historical_context: str = "") -> RiskAnalysis:
-        """Analyze outbreak risk level from a specific perspective."""
-        logger.info(f"Analyzing risk for {report.location} from perspective: {perspective}")
-
+    @staticmethod
+    def _context_blocks(context: ContextData = None, historical_context: str = "") -> tuple:
         context_info = ""
         if context:
             context_info = f"""
@@ -180,10 +182,89 @@ class RiskAnalysisAgent:
             - Conflict Zone: {"Yes" if context.conflict_zone else "No"}
             - Recent News: {', '.join(context.recent_news)}
             """
-        
         history_info = ""
         if historical_context:
             history_info = f"\nHistorical Data Summary for Comparison:\n{historical_context}"
+        return context_info, history_info
+
+    @staticmethod
+    def _to_risk(data: dict) -> RiskAnalysis:
+        risk_level = str(data.get("risk_level", "UNKNOWN")).upper()
+        if risk_level not in ["HIGH", "MEDIUM", "LOW"]:
+            risk_level = "MEDIUM"
+        return RiskAnalysis(
+            risk_level=risk_level,
+            confidence=str(data.get("confidence", "50%")),
+            possible_disease=data.get("possible_disease", "Unknown"),
+            reason=data.get("reason", "Analysis completed")
+        )
+
+    async def analyze_risk_perspectives(self, report: OutbreakReport, perspectives: List[str], context: ContextData = None, historical_context: str = "") -> List[RiskAnalysis]:
+        """All perspectives in one model call (one request instead of one per perspective)."""
+        logger.info(f"Analyzing risk for {report.location} from perspectives: {', '.join(perspectives)}")
+        context_info, history_info = self._context_blocks(context, historical_context)
+
+        prompt = f"""
+        You are a panel of Risk Analysis Sub-Agents. Each member assesses this potential disease
+        outbreak independently, from one perspective only.
+
+        Location: {report.location}
+        Symptoms: {', '.join(report.symptoms)}
+        Cases: {report.cases}
+        Date: {report.date or 'Not specified'}
+        {context_info}
+        {history_info}
+
+        Perspectives:
+        - 'symptoms': Focus on clinical patterns and disease matches.
+        - 'statistical': Focus on case count growth and population density. Compare with historical baseline for THIS location if provided.
+        - 'historical': Focus on seasonal trends and known regional hotspots. Analyze if this follows past patterns for THIS location.
+        - 'environmental': Focus on how water, security, and conflict impact transmission.
+
+        Risk levels: HIGH, MEDIUM, LOW
+
+        Return a JSON list with exactly one object per perspective, in this order: {', '.join(perspectives)}
+        [
+          {{
+            "perspective": "symptoms",
+            "risk_level": "HIGH/MEDIUM/LOW",
+            "confidence": "percentage",
+            "possible_disease": "most likely disease",
+            "reason": "brief explanation based on this perspective only"
+          }}
+        ]
+        """
+
+        try:
+            loop = asyncio.get_event_loop()
+            response = await loop.run_in_executor(None, self.gemini.generate_text, prompt)
+            data = json.loads(response)
+            if isinstance(data, dict):
+                data = data.get("opinions") or data.get("perspectives") or [data]
+            by_name = {str(d.get("perspective", "")).lower(): d for d in data if isinstance(d, dict)}
+            opinions = []
+            for i, p in enumerate(perspectives):
+                d = by_name.get(p) or (data[i] if i < len(data) and isinstance(data[i], dict) else None)
+                if d is None:
+                    raise ValueError(f"no opinion returned for the '{p}' perspective")
+                opinions.append(self._to_risk(d))
+            return opinions
+
+        except AIQuotaExhausted:
+            raise  # surfaced to the user as 'AI quota reached', not stored as an analysis
+        except Exception as e:
+            logger.error(f"Risk analysis failed: {e}")
+            return [RiskAnalysis(
+                risk_level="UNKNOWN",
+                confidence="0%",
+                possible_disease="Unknown",
+                reason=f"Analysis failed: {str(e)}"
+            ) for _ in perspectives]
+
+    async def analyze_risk(self, report: OutbreakReport, perspective: str = "general", context: ContextData = None, historical_context: str = "") -> RiskAnalysis:
+        """Analyze outbreak risk level from a specific perspective."""
+        logger.info(f"Analyzing risk for {report.location} from perspective: {perspective}")
+        context_info, history_info = self._context_blocks(context, historical_context)
 
         prompt = f"""
         You are a Risk Analysis Sub-Agent specializing in {perspective}.
@@ -217,19 +298,10 @@ class RiskAnalysisAgent:
         try:
             loop = asyncio.get_event_loop()
             response = await loop.run_in_executor(None, self.gemini.generate_text, prompt)
-            data = json.loads(response)
+            return self._to_risk(json.loads(response))
 
-            risk_level = data.get("risk_level", "UNKNOWN").upper()
-            if risk_level not in ["HIGH", "MEDIUM", "LOW"]:
-                risk_level = "MEDIUM"
-
-            return RiskAnalysis(
-                risk_level=risk_level,
-                confidence=data.get("confidence", "50%"),
-                possible_disease=data.get("possible_disease", "Unknown"),
-                reason=data.get("reason", "Analysis completed")
-            )
-
+        except AIQuotaExhausted:
+            raise  # surfaced to the user as 'AI quota reached', not stored as an analysis
         except Exception as e:
             logger.error(f"Risk analysis ({perspective}) failed: {e}")
             return RiskAnalysis(
@@ -300,6 +372,8 @@ class AlertGenerationAgent:
                 why_urgent=data.get("why_urgent", f"Identified a cluster of {report.cases} cases in {report.location}.")
             )
 
+        except AIQuotaExhausted:
+            raise  # surfaced to the user as 'AI quota reached', not stored as an analysis
         except Exception as e:
             logger.error(f"Alert generation failed: {e}")
             return AlertMessage(
@@ -342,10 +416,9 @@ class SuperAgent:
             # 4. Dynamic Risk Sub-Agents (PERSPECTIVE-BASED)
             # Use research data AND historical context if available
             perspectives = ["symptoms", "statistical", "historical", "environmental"]
-            logger.info(f"🧠 SuperAgent: Spawning {len(perspectives)} Risk Sub-Agents for {report.location}...")
+            logger.info(f"🧠 SuperAgent: Asking {len(perspectives)} risk perspectives in one call for {report.location}...")
             
-            risk_tasks = [self.risk_agent.analyze_risk(report, p, context_data, historical_context) for p in perspectives]
-            risk_opinions = await asyncio.gather(*risk_tasks)
+            risk_opinions = await self.risk_agent.analyze_risk_perspectives(report, perspectives, context_data, historical_context)
             
             # 5. Merge Layer / Consensus
             consensus = self._reach_consensus(risk_opinions)
@@ -554,6 +627,8 @@ class DataAssistantAgent:
                 "response": response,
                 "data_summary": data_summary
             }
+        except AIQuotaExhausted:
+            raise  # surfaced to the user as 'AI quota reached', not stored as an analysis
         except Exception as e:
             logger.error(f"Query processing failed: {e}")
             return {
@@ -632,6 +707,8 @@ class DataAssistantAgent:
             analysis_result["timestamp"] = str(datetime.now())
             analysis_result["data_points_analyzed"] = len(self.data_store)
             return analysis_result
+        except AIQuotaExhausted:
+            raise  # surfaced to the user as 'AI quota reached', not stored as an analysis
         except Exception as e:
             logger.error(f"Full analysis failed: {e}")
             return {

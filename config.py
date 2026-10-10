@@ -59,6 +59,10 @@ LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 GEMINI_MODEL_PREFERENCES = [
     m.strip() for m in os.getenv("GEMINI_MODELS", "gemini-3.8-flash").split(",") if m.strip()
 ]
+# Requests per minute allowed per model (0 = no pacing). Free tier: 5 for flash models.
+GEMINI_RPM = int(os.getenv("GEMINI_RPM", "0"))
+# Longest one AI call may take, waits included, before giving up.
+GEMINI_CALL_BUDGET_SECONDS = int(os.getenv("GEMINI_CALL_BUDGET_SECONDS", "60"))
 
 # Validation Settings
 MAX_TEXT_LENGTH = int(os.getenv("MAX_TEXT_LENGTH", "20000"))

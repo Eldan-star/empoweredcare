@@ -80,7 +80,7 @@ Tick the boxes as you go. If anything fails, copy the error text, or take a scre
 
 ## Step 3 — The AI pipeline with your real key (must pass)
 
-**Why:** this is the core of the product, and it is the part I couldn't run. A single report makes about 7 AI calls (section 5 of [CODE_GUIDE.md](CODE_GUIDE.md) explains them). Any one of them can fail if the key, the quota or the model name is wrong.
+**Why:** this is the core of the product, and it is the part I couldn't run. A single report makes about 4 AI calls (section 5 of [CODE_GUIDE.md](CODE_GUIDE.md) explains them). Any one of them can fail if the key, the quota or the model name is wrong. On the free tier, set `GEMINI_RPM=5` in `.env` and list a backup model in `GEMINI_MODELS`. If you see "AI quota reached", the daily limit is used up: wait for it to reset or enable billing.
 
 On the **Process a report** page:
 - [ ] Click "Use an example" and process it. After several seconds you should see:

@@ -29,6 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from services.agents import DATA_STORE_PATH  # noqa: E402
+from services.gemini_service import AIQuotaExhausted  # noqa: E402
 
 FAILURE_MARKERS = (
     "Analysis failed",
@@ -78,6 +79,10 @@ async def reprocess(records: list, failed: list, super_agent, history: str) -> t
         print(f"→ {sid[:8]}  {record['extracted_data'].get('location')} … ", end="", flush=True)
         try:
             results = [to_fields(r) for r in await super_agent.process_outbreak_parallel(raw, history)]
+        except AIQuotaExhausted as e:
+            print("stopped")
+            print(f"\n{e}\nRecords finished so far are kept; run the script again later for the rest.")
+            break
         except Exception as e:
             still_failing.append((sid, str(e)))
             print("failed")
@@ -148,7 +153,7 @@ def main():
 
     llm = get_llm(GeminiService())
     history = DataAssistantAgent(llm).get_historical_context()
-    print("\nReprocessing (about 7 AI calls per record)…")
+    print("\nReprocessing (about 4 AI calls per record)…")
     updated, added, still_failing, skipped = asyncio.run(reprocess(records, failed, SuperAgent(llm), history))
 
     if updated or added:

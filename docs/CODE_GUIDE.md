@@ -88,7 +88,7 @@ The "who can use them" column is enforced by two small functions near the top of
 
 1. **ExtractionAgent** turns messy text such as *"12 kids with rash and fever in Jinka since Monday, 2 lab confirmed"* into one structured record **per location and disease**: location, symptoms, cases, date, and Suspected/Probable/Confirmed.
 2. **ValidationAgent** asks the AI whether the record looks complete and plausible.
-3. **RiskAnalysisAgent** runs **four times in parallel**, each time from a different "perspective" (symptoms, statistical, historical, environmental). Each run returns HIGH/MEDIUM/LOW, a confidence and a reason. The historical perspective is given a summary of past reports.
+3. **RiskAnalysisAgent** asks for four opinions, each from a different "perspective" (symptoms, statistical, historical, environmental), in **one AI call**. It used to make four separate calls; combining them saves quota. Each opinion is HIGH/MEDIUM/LOW with a confidence and a reason. The prompt includes a summary of past reports, which the historical perspective uses.
 4. **Consensus** (`_reach_consensus`) is plain arithmetic, not AI. It turns HIGH=3, MEDIUM=2, LOW=1 into numbers, averages them and rounds the result.
    - **Weakness:** averaging dilutes a single alarm. One HIGH and three LOWs becomes MEDIUM. Two HIGHs and two MEDIUMs also becomes MEDIUM, because of how Python rounds 2.5.
    - This is one reason the plan (M5) replaces it with fixed rules where a threshold crossing can never be averaged away.
@@ -109,7 +109,14 @@ The agents used to call Gemini directly. Now they call a small common interface 
 `GeminiProvider` and `ClaudeProvider` both implement it, and `LLM_PROVIDER` in `.env` picks one. This makes it a one-line settings change to compare models, or to replace one later. Reading images is still Gemini-only, through `gemini_service.py`.
 
 ### The other services
-- `gemini_service.py`: the Gemini connection, using Google's current `google-genai` library. When Google is busy (error 503) or the connection drops, it retries the same model after 2, 4 and 8 seconds; on "too many requests" (error 429) it waits 35 seconds. Then it moves to the next model in `GEMINI_MODELS`. Real errors, such as a bad key or a retired model, skip the retries.
+- `gemini_service.py`: the Gemini connection, using Google's current `google-genai` library. It handles Google's limits:
+  - **Per-minute limit** (error 429 with a short wait): it waits exactly as long as Google asks, then retries.
+  - **Daily limit**, or a wait longer than a minute: it skips that model at once and remembers it is out of quota until it resets.
+  - **Busy or dropped connection** (error 503 and similar): it retries after 2, 4 and 8 seconds.
+  - **Pacing:** `GEMINI_RPM` keeps each model under its requests-per-minute limit.
+  - **Time budget:** `GEMINI_CALL_BUDGET_SECONDS` caps how long one call may take.
+  - **Real errors** (bad key, retired model): it moves to the next model straight away.
+  - **When every model is out of quota,** the website shows "AI quota reached" (HTTP 503) instead of hanging, and nothing half-analysed is saved.
 - `scripts/reprocess_failed.py`: a one-off tool that re-runs stored records whose AI analysis failed and replaces the failed analysis in place.
 - `email_service.py`: sends invite and reset emails. It needs the SMTP settings in `.env` (SMTP is the standard for sending email).
 - `ocr_engine.py`, `layout_detector.py`, `preprocessor.py`, `structurer.py`: the scanned-document pipeline behind `/process`. These are heavy, so they only load the first time `/process` is used.
@@ -175,7 +182,7 @@ What happens when someone pastes *"Jinka: 12 suspected measles cases, 2 IgM posi
 2. `lib/api.ts` sends a POST request to `/outbreak/process` with the login token attached.
 3. `get_current_user` in `main.py` checks the token. If it is valid, the request continues.
 4. The text-length limit is checked.
-5. `SuperAgent` runs the steps in section 3: extract → validate → 4 risk opinions → consensus → alert. That is **about 7 AI calls per record**, which is why processing takes several seconds.
+5. `SuperAgent` runs the steps in section 3: extract → validate → 4 risk opinions → consensus → alert. That is **about 4 AI calls per record** (1 for extraction, which covers every record in the text, then 3 per record), which is why processing takes several seconds. On Gemini's free tier (about 20 requests per model per day) that allows only a handful of reports a day.
 6. `DataAssistantAgent.add_report` saves the result to `models/outbreak_data.json` as `pending`.
 7. The response returns to the browser. The page shows the extracted data, the four opinions, the final level and the alert.
 8. Later, an admin opens Alert review and approves or rejects it. That calls `/outbreak/approve/{id}`, which updates the status in the file.
