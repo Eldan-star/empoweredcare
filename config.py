@@ -54,6 +54,11 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:8080")
 LOG_LEVEL = "INFO"
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
+# Database (PostgreSQL). Format: postgresql+psycopg://USER:PASSWORD@HOST:PORT/DATABASE
+DATABASE_URL = os.getenv(
+    "DATABASE_URL", "postgresql+psycopg://empoweredcare:empoweredcare@localhost:5432/empoweredcare"
+)
+
 # Gemini AI Settings
 # Comma-separated in .env, tried in order. Run `python list_models.py` to see what your key can use.
 GEMINI_MODEL_PREFERENCES = [
