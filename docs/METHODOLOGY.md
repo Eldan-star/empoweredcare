@@ -326,12 +326,21 @@ output once DHIS2 history exists? (We plan that as an upgrade, §6.3.)
 
 | Rule | Definition | Source |
 |---|---|---|
-| Suspected outbreak | ≥5 suspected cases in a woreda or facility catchment within 30 days | WHO AFRO [7]; used in Ethiopian investigations [8] |
-| Confirmed outbreak | ≥3 IgM-positive cases in a woreda within a month | Ethiopian national guideline as cited in [9] |
-| Approaching | 3–4 suspected in 30 days, or 2 confirmed | Internal early-warning rule; not official |
+| Alert threshold | A single suspected case | EPHI PHEM Guideline 2022, Table 4-5, p. 67 [40] |
+| Action threshold | ≥5 suspected **or** ≥3 confirmed (IgM-positive or epidemiologically linked) in a specified area within 1 month | [40], Table 4-5, pp. 67–68; consistent with WHO AFRO [7] |
+| Humanitarian alert | Double the average of the last 3 weeks | [40], Table 4-6, p. 71 |
+| Approaching action threshold | 3–4 suspected in 1 month, or 2 confirmed | Internal priority flag; not official |
 
-All values are configurable. They will be checked against the current EPHI manuals once
-those are added to `docs/references/ephi/`.
+- **Case definitions:**
+  - **Suspected:** fever and generalized maculopapular rash with cough, coryza or
+    conjunctivitis, or clinician suspicion.
+  - **Confirmed:** IgM-positive, or epidemiologically linked ([40], Annex 5, p. 155).
+- **Community signals are not cases.** A community "fever and rash" signal is a syndrome
+  that also covers chickenpox and mpox. It counts toward thresholds only after a facility
+  applies the standard case definition.
+- **Configurable values.** All values are configurable. The "specified area" defaults to
+  woreda or facility catchment until EPHI confirms which unit they apply.
+- The full comparison with the EPHI documents is in `EPHI_ALIGNMENT.md`.
 
 **Validation.** Unit tests on edge cases: window boundaries, epidemiological weeks that
 span months, late reports.
@@ -378,7 +387,10 @@ signals for human verification.
 4. Verification: Verify / Duplicate / Dismiss.
 
 **Evidence.**
-- Ethiopia's community event-based surveillance model is described in [26].
+- Ethiopia's community event-based surveillance model is described in [26] and in EPHI's
+  CEBS manual [41]. The manual expects the health extension worker to verify each
+  notification within 1 hour, and names positive predictive value and sensitivity among its
+  own performance indicators.
 - An evaluation of a multi-component early warning system in Doolo zone found a low
   positive predictive value for community triggers (about 6%) [27].
 - So verification is not optional, and raw signals are never treated as cases.
@@ -689,3 +701,5 @@ than the exact article title; follow the link for the full citation.
 37. DHIS2 Climate & Health Analytics Platform (CHAP). https://chap.dhis2.org/about/
 38. WOAH World Animal Health Information System (WAHIS). https://www.woah.org/en/what-we-do/animal-health-and-welfare/disease-data-collection/
 39. FAO EMPRES-i. https://www.fao.org/agroinformatics/projects/projects-detail/empres-i
+40. Ethiopian Public Health Institute / Ministry of Health. Public Health Emergency Management (PHEM) Guideline for Ethiopia, 2nd edition, December 2022. Converted text in `docs/references/ephi/`.
+41. Ethiopian Public Health Institute. Community and Event Based Surveillance Implementation Manual, September 2021. Converted text in `docs/references/ephi/`.

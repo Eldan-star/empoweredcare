@@ -263,12 +263,19 @@ down-weight past outbreaks [5]) remain useful for endemic, seasonal diseases —
 EPIDEMIA project uses it for malaria in Amhara [6] — but they are not the core engine for
 measles.
 
-### 6.2 Outbreak thresholds (configurable; verify against the current EPHI guideline)
+### 6.2 Outbreak thresholds (checked against the EPHI PHEM Guideline 2022; configurable)
 | Rule | Definition | Source |
 |---|---|---|
-| Suspected outbreak | ≥5 suspected cases in one woreda/health-facility catchment within 30 days | WHO AFRO [7]; used in Ethiopian investigations [8] |
-| Confirmed outbreak | ≥3 lab-confirmed (IgM+) cases in one woreda within a month | Ethiopian national measles guideline as cited in [9] |
-| Approaching threshold | 3–4 suspected cases within 30 days, or confirmed count 2 | Internal early-warning rule |
+| **Alert threshold** | A single suspected measles case | PHEM Guideline 2022, Table 4-5, p. 67 |
+| **Action threshold** | ≥5 suspected **or** ≥3 confirmed cases (IgM-positive **or** epidemiologically linked) in a specified area within 1 month | PHEM Guideline 2022, Table 4-5, pp. 67–68; consistent with WHO AFRO [7] |
+| Humanitarian alert | Double the average of the last 3 weeks (IDP and refugee settings) | PHEM Guideline 2022, Table 4-6, p. 71 |
+| Approaching action threshold | 3–4 suspected within 1 month, or 2 confirmed | Internal priority flag, not an EPHI rule |
+| Case fatality flag | Above 3% in an outbreak | PHEM Guideline 2022, Table 4-5 (acceptable case fatality rate) |
+
+- **"Specified area":** woreda or facility catchment by default. EPHI to confirm.
+- **Proposed change to the alert ladder (awaiting decision):** the two triggers of the
+  action threshold are one EPHI rule, and our RED/ORANGE/YELLOW colours clash with the PHEOC
+  activation levels. See `EPHI_ALIGNMENT.md` §1.
 
 ### 6.3 Early-rise flags (sub-threshold)
 - **EARS C1, C2, C3** (US CDC): compare the current count with the mean and standard

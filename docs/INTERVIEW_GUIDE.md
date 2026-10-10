@@ -68,6 +68,17 @@ conversations into decisions about the build. Each conversation is 30–45 minut
 - How much weekly reporting still starts on paper? How long before it is entered?
 - Which woredas go "silent" (stop reporting)? Why?
 
+**Questions raised by the EPHI manuals** (see `EPHI_ALIGNMENT.md` §5)
+- Is measles case-based or line-list data captured electronically (a DHIS2 Tracker
+  program), or only on paper?
+- Which "specified area" do you use for the measles action threshold: woreda, kebele or
+  facility catchment?
+- Would you prefer our alert levels to use the PHEM terms (alert / action / signal)? Should
+  RED/ORANGE/YELLOW stay reserved for PHEOC activation?
+- Is the humanitarian measles alert (double the 3-week average) applied in IDP sites today?
+- How far has CEBS been integrated into eCHIS? Is there an API?
+- Do woredas enter facility weekly reports into DHIS2 on the facilities' behalf?
+
 **EPI programme**
 - How do you decide where to run measles catch-up campaigns? How often is the WHO
   measles risk assessment done, and by whom?

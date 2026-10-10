@@ -98,6 +98,7 @@ Tests: `python -m pytest tests -q`. See [docs/TESTING_GUIDE.md](docs/TESTING_GUI
 |---|---|
 | [docs/SYSTEM_SPEC.md](docs/SYSTEM_SPEC.md) | What the system is, every design decision, and the build plan |
 | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | Every model and AI use, with evidence and limits, for expert review |
+| [docs/EPHI_ALIGNMENT.md](docs/EPHI_ALIGNMENT.md) | Our design checked against the EPHI PHEM, CEBS and PHEOC manuals |
 | [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md) | Where AI runs today, where it doesn't, and where it's going |
 | [docs/CODE_GUIDE.md](docs/CODE_GUIDE.md) | A plain-language walk through the code |
 | [docs/TESTING_GUIDE.md](docs/TESTING_GUIDE.md) | What to test and why |
