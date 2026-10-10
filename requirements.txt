@@ -37,6 +37,7 @@ psycopg[binary]==3.3.6
 # Geography (M2)
 shapely==2.1.2
 rapidfuzz==3.14.3
+pyshp==3.1.6
 
 # Tests
 pytest==9.1.1

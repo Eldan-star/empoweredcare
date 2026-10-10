@@ -59,7 +59,26 @@ python scripts\reprocess_failed.py --dry-run
 python scripts\reprocess_failed.py
 ```
 
-## 6. Check it (optional)
+## 6. Load Ethiopia's official boundaries (OCHA)
+
+These give the app the official list of regions, zones and woredas with their codes (P-codes). Two things depend on it: the geocoder, which turns "Jimma zone, Seka Chekorsa" into a woreda code, and the M5 map.
+
+1. In your browser, open https://data.humdata.org/dataset/cod-ab-eth and download the boundary files: the shapefile zip(s) for admin levels 1, 2 and 3. If one zip holds all levels, extract it and use the level 1/2/3 `.shp` files.
+2. Optionally, download the population table from https://data.humdata.org/dataset/cod-ps-eth (a CSV with `ADM3_PCODE` and a total-population column).
+3. Check first, then load. Use your file names:
+   ```
+   python scripts\load_boundaries.py --adm1 eth_admbnda_adm1.zip --adm2 eth_admbnda_adm2.zip --adm3 eth_admbnda_adm3.zip --population eth_admpop_adm3.csv --dry-run
+   python scripts\load_boundaries.py --adm1 eth_admbnda_adm1.zip --adm2 eth_admbnda_adm2.zip --adm3 eth_admbnda_adm3.zip --population eth_admpop_adm3.csv
+   ```
+   ✅ It reports how many regions, zones and woredas it loaded, and how many neighbouring pairs it found.
+4. Attach codes to the reports already stored, then restart the backend so new reports get codes too:
+   ```
+   python scripts\geocode_signals.py
+   ```
+
+If a place name fits more than one woreda (some woreda names repeat across regions), it's **flagged as ambiguous** with the candidates listed. It is never guessed. If the loader says it can't find `ADM3_PCODE` / `ADM3_EN` columns, send me the column list it prints.
+
+## 7. Check it (optional)
 
 ```
 python -m pytest tests -q

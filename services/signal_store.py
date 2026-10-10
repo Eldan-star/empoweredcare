@@ -64,13 +64,24 @@ def to_record(s: Signal) -> dict:
         "source_type": s.source_type,
         "cluster_id": s.cluster_id,
         "pcode": s.pcode,
+        "geocode_confidence": s.geocode_confidence,
+        "geocode_ambiguous": s.geocode_ambiguous,
+        "geocode_candidates": s.geocode_candidates or [],
         "analysis_failed": s.analysis_failed,
     }
 
 
 class SignalStore:
-    def __init__(self, session_factory: Callable[[], Session]):
+    def __init__(self, session_factory: Callable[[], Session], geocoder=None):
         self._session_factory = session_factory
+        self.geocoder = geocoder  # services.geocoder.Geocoder, or None before boundaries are loaded
+
+    def _geocode(self, signal: Signal) -> None:
+        if not self.geocoder or not signal.location_text or signal.location_text == "Unknown":
+            return
+        g = self.geocoder.resolve(signal.location_text)
+        signal.pcode, signal.geocode_confidence = g.pcode, g.confidence
+        signal.geocode_ambiguous, signal.geocode_candidates = g.ambiguous, g.candidates
 
     def add(
         self,
@@ -113,8 +124,9 @@ class SignalStore:
                 analysis_failed=analysis_failed(analysis, extracted),
                 status=status,
                 submitted_by=submitted_by,
-                cluster_id=self._cluster_for(db, location, disease, created_at),
             )
+            self._geocode(signal)
+            signal.cluster_id = self._cluster_for(db, location, disease, created_at, signal.pcode)
             if created_at is not None:
                 signal.created_at = signal.updated_at = created_at
             db.add(signal)
@@ -123,19 +135,20 @@ class SignalStore:
             return to_record(signal)
 
     @staticmethod
-    def _cluster_for(db: Session, location, disease, when: Optional[datetime]) -> str:
-        """Join the cluster of a recent report with the same location and disease, or
-        start a new one. Replaces the old behaviour of merging such reports into one
-        record, which lost the individual reports. Location matching is by text until
-        the geocoder assigns P-codes."""
-        if not location or location == "Unknown" or not disease or disease == "Unknown":
+    def _cluster_for(db: Session, location, disease, when: Optional[datetime], pcode: Optional[str] = None) -> str:
+        """Join the cluster of a recent report with the same place and disease, or start a
+        new one. Replaces the old behaviour of merging such reports into one record, which
+        lost the individual reports. The place is the P-code when the geocoder found one
+        (unambiguously), otherwise the location text."""
+        if not disease or disease == "Unknown" or not (pcode or (location and location != "Unknown")):
             return str(uuid.uuid4())
         since = (when or datetime.now(timezone.utc)) - CLUSTER_WINDOW
         if db.get_bind().dialect.name == "sqlite":  # SQLite stores naive UTC timestamps
             since = since.astimezone(timezone.utc).replace(tzinfo=None) if since.tzinfo else since
+        same_place = (Signal.pcode == pcode) if pcode else (func.lower(Signal.location_text) == location.lower())
         existing = db.scalars(
             select(Signal.cluster_id)
-            .where(func.lower(Signal.location_text) == location.lower())
+            .where(same_place)
             .where(func.lower(Signal.disease) == disease.lower())
             .where(Signal.created_at >= since)
             .order_by(Signal.created_at.desc())
@@ -185,8 +198,25 @@ class SignalStore:
             s.cases = extracted.get("cases") if isinstance(extracted.get("cases"), int) else None
             s.classification = extracted.get("classification")
             s.analysis_failed = analysis_failed(analysis, extracted)
+            self._geocode(s)
             db.commit()
             return True
+
+    def regeocode(self, only_missing: bool = True) -> dict:
+        """Re-run the geocoder over stored reports (after loading or updating boundaries)."""
+        if not self.geocoder:
+            raise RuntimeError("No boundaries loaded: run scripts/load_boundaries.py first")
+        counts = {"resolved": 0, "ambiguous": 0, "unmatched": 0}
+        with self._session_factory() as db:
+            q = select(Signal)
+            if only_missing:
+                q = q.where(Signal.pcode.is_(None))
+            for s in db.scalars(q):
+                self._geocode(s)
+                key = "ambiguous" if s.geocode_ambiguous else ("resolved" if s.pcode else "unmatched")
+                counts[key] += 1
+            db.commit()
+        return counts
 
     def failed_records(self) -> list[dict]:
         with self._session_factory() as db:

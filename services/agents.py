@@ -475,7 +475,12 @@ class DataAssistantAgent:
         self.gemini = gemini_service
         if store is None:
             from db.session import SessionLocal
-            store = SignalStore(SessionLocal)
+            from services.geocoder import Geocoder
+            with SessionLocal() as session:
+                geocoder = Geocoder.from_db(session)
+            store = SignalStore(SessionLocal, geocoder if geocoder.units else None)
+            logger.info(f"Geocoder: {len(geocoder.units)} administrative units loaded"
+                        if geocoder.units else "Geocoder: no boundaries loaded yet (scripts/load_boundaries.py)")
         self.store = store
         logger.info(f"Data Assistant initialized with {self.store.count()} reports in the database")
 
