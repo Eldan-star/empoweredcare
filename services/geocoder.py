@@ -60,7 +60,7 @@ class GeocodeResult:
     confidence: float = 0.0
     ambiguous: bool = False
     candidates: list = field(default_factory=list)  # [{"pcode", "name", "path"}] when ambiguous
-    method: str = "none"  # exact | fuzzy | none
+    method: str = "none"  # exact | fuzzy | conflict | none
 
 
 class Geocoder:
@@ -143,13 +143,41 @@ class Geocoder:
         if not matched:
             return GeocodeResult(pcode=None)
 
-        # Narrow each part's candidates to those consistent with the other parts.
+        # Parts that contradict the others (e.g. "Dera" given with parents in another
+        # region) are set aside and the result is flagged, never trusted. Repeatedly drop
+        # every part tied for the most clashes: one dissenter among agreeing parts goes;
+        # two parts that only contradict each other both go, since neither can be preferred.
         sets = [m[0] for m in matched]
+
+        def compatible(a: set, b: set) -> bool:
+            return any(self._consistent(x, {y}) for x in a for y in b)
+
+        alive = list(range(len(sets)))
+        conflicts: set = set()
+        while True:
+            clashes = {i: sum(not compatible(sets[i], sets[j]) for j in alive if j != i) for i in alive}
+            worst = max(clashes.values(), default=0)
+            if worst == 0:
+                break
+            for i in [i for i, c in clashes.items() if c == worst]:
+                conflicts |= sets[i]
+                alive.remove(i)
+
         narrowed = []
-        for i, cands in enumerate(sets):
-            others = [s for j, s in enumerate(sets) if j != i]
-            keep = {c for c in cands if all(any(self._consistent(c, {o}) for o in os) for os in others)}
-            narrowed.append(keep or cands)
+        for i in alive:
+            others = [sets[j] for j in alive if j != i]
+            keep = {c for c in sets[i] if all(any(self._consistent(c, {o}) for o in os) for os in others)}
+            narrowed.append(keep or sets[i])  # pairwise-compatible parts can still fail jointly
+        if conflicts:
+            agreed = [n for n in narrowed if n]
+            best = max(agreed, key=lambda s: max(self.units[p].level for p in s)) if agreed else set()
+            anchor = self._common_ancestor(best) if best else None
+            u = self.units.get(anchor) if anchor else None
+            return GeocodeResult(
+                pcode=anchor, name=u.name if u else None, level=u.level if u else None,
+                confidence=0.5 if u else 0.0, ambiguous=True, method="conflict",
+                candidates=[{"pcode": p, "name": self.units[p].name, "path": self.path(p)} for p in sorted(conflicts)],
+            )
 
         # The answer is the deepest level reached by any part.
         deepest = max(narrowed, key=lambda s: max(self.units[p].level for p in s))

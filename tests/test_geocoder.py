@@ -77,3 +77,16 @@ def test_zone_only(geo):
     # "Jimma" (zone) and "Jimma Town" both normalise to "jimma": two zone-level units.
     assert r.ambiguous and {c["pcode"] for c in r.candidates} == {"ET0407", "ET0499"}
     assert r.pcode == "ET04"  # but both are in Oromia, so the region is certain
+
+
+def test_parents_that_contradict_the_place_are_flagged_not_trusted(geo):
+    # The only "Seka Chekorsa" is in Jimma (Oromia); the text claims South Gondar.
+    # Two parts disagree and nothing says which is right: no code, both candidates.
+    r = geo.resolve("Seka Chekorsa, South Gondar")
+    assert (r.pcode, r.ambiguous, r.method) == (None, True, "conflict")
+    assert {c["pcode"] for c in r.candidates} == {"ET040712", "ET0302"}
+    # When two parts agree (South Gondar is in Amhara) against one, keep what they support
+    # and list the odd one out for a person to check.
+    r = geo.resolve("Seka Chekorsa, South Gondar, Amhara")
+    assert (r.pcode, r.ambiguous) == ("ET0302", True)
+    assert [c["pcode"] for c in r.candidates] == ["ET040712"]
