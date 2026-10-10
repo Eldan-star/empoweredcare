@@ -43,11 +43,20 @@ and why.**
 - AI quota handling: requests are paced, the app falls back to another model, and it shows
   a clear message when quota runs out.
 
+**Built in M3** (analytics; see [docs/EVALUATION.md](docs/EVALUATION.md) for what it can and cannot do)
+- EPHI's measles alert and action thresholds, the humanitarian rule, early-rise
+  statistics (EARS, CUSUM), and surveillance-silence and completeness flags.
+- The measles risk model: vaccine protection, susceptible build-up, reporting rate, and
+  spread from nearby places. It ranks zones for next-quarter burden.
+- An evaluation harness on simulated Ethiopian outbreaks from IDM's laser-measles.
+- API endpoints: `/surveillance/detect`, `/surveillance/timeseries`, `/surveillance/risk`.
+  They fill with data once weekly counts (DHIS2, after EPHI approval) and vaccination
+  coverage are loaded.
+
 **Not built yet** (see `docs/SYSTEM_SPEC.md` for the plan)
 
 | Milestone | What it adds |
 |---|---|
-| M3 | Measles risk model, outbreak detection, and testing on simulated Ethiopian outbreaks (IDM's laser-measles) |
 | M4 | Community trigger intake, the review page for incoming signals, ReliefWeb / WHO AFRO / IOM DTM feeds, bulletin digitiser, assistant over the EPHI guidelines |
 | M5 | Alerts at EPHI levels, an interactive woreda map, situation-report drafting |
 | Later | SMS reporting for health extension workers, SMS alerts to officers, offline data entry, learned models, more diseases, One Health data |
@@ -98,6 +107,7 @@ Tests: `python -m pytest tests -q`. See [docs/TESTING_GUIDE.md](docs/TESTING_GUI
 |---|---|
 | [docs/SYSTEM_SPEC.md](docs/SYSTEM_SPEC.md) | What the system is, every design decision, and the build plan |
 | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | Every model and AI use, with evidence and limits, for expert review |
+| [docs/EVALUATION.md](docs/EVALUATION.md) | Results of testing detection and the risk index on simulated outbreaks |
 | [docs/EPHI_ALIGNMENT.md](docs/EPHI_ALIGNMENT.md) | Our design checked against the EPHI PHEM, CEBS and PHEOC manuals |
 | [docs/AI_ARCHITECTURE.md](docs/AI_ARCHITECTURE.md) | Where AI runs today, where it doesn't, and where it's going |
 | [docs/CODE_GUIDE.md](docs/CODE_GUIDE.md) | A plain-language walk through the code |

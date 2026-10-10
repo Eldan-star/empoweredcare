@@ -219,6 +219,10 @@ Spatial coupling follows the gravity form established for measles metapopulation
 ### 5.5 Output
 - `index_i` = λ_i rescaled to a 0–100 rank within the country for the month, plus the top
   contributing factors (susceptible share, nearby incidence, surveillance silence).
+- **Use it for burden, not ignition (evaluation, M3).** On simulated data the index ranks
+  where measles will be heaviest next quarter far better than the baselines. It does not
+  predict which quiet units ignite next, so it is presented only for the burden question
+  (`EVALUATION.md`).
 - **It is a ranked index, not a probability.** It will not be presented as a probability
   until it has been backtested against historical outbreaks.
 - **Horizons:**
@@ -416,6 +420,14 @@ correctly).
 - **Real-history checks:** past EPHI bulletins and ReliefWeb / WHO AFRO outbreak reports
   now; DHIS2 history once approved.
 - Reports are written to `evaluation/reports/`.
+- **First results (M3, October 2026):** in `EVALUATION.md` and METHODOLOGY §5.1.
+  - The alert threshold is the timely signal: it catches about 75% of outbreaks within
+    about a week.
+  - The action threshold is about 92% reliable but late.
+  - The risk index beats every baseline for "where measles will be heaviest next quarter"
+    (44–53% precision against 24–31% for the baselines).
+  - It does **not** beat random for ignition among quiet units, so it is shown only for the
+    burden question.
 
 **Why laser-measles is the test bed and not the live engine.**
 - Calibrating it needs Ethiopian case history.

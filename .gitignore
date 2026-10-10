@@ -239,3 +239,6 @@ models/outbreak_data.backup-*.json
 
 # Downloaded boundary and population files (large; download from HDX, see docs/DATABASE_SETUP.md)
 data/boundaries/
+
+# Evaluation environment (requirements-sim.txt)
+.venv-sim/

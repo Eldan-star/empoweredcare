@@ -31,7 +31,7 @@ class Panel:
     # values before that, as the live system would.
     cases_provisional: Optional[np.ndarray] = None
     sia_coverage: Optional[np.ndarray] = None   # (months, zones), 0 where no campaign
-    sia_target_share: float = 51 / 180          # 9-59 months under an even age spread
+    sia_target_share: object = 51 / 180         # 9-59 months under an even spread; or (months, zones)
     region: Optional[list[str]] = None          # region code per zone, for pooling rho
     threats: Optional[list[list[str]]] = None   # per zone, current context factors
 
@@ -95,14 +95,16 @@ def run(panel: Panel, incidence_months: int = 2, silent_months: int = 1, min_mon
         reported = ~np.isnan(known)
         cases = np.nan_to_num(known, nan=0.0)
         rho, estimated = _rho_for_month(panel, unvacc, cases, t, min_months, prior_months, rho_window_months)
+        share = (lambda m: panel.sia_target_share[m] if np.ndim(panel.sia_target_share) == 2
+                 else panel.sia_target_share)
         if panel.cases_provisional is None:
             s = mr.step_susceptibles(s, panel.births[t], peff[t], cases[t], rho,
-                                     mr.sia_immunized(s, sia[t], panel.sia_target_share, ve2))
+                                     mr.sia_immunized(s, sia[t], share(t), ve2))
         else:  # data were revised: rebuild the susceptible path from the start
             s = s0
             for m in range(t + 1):
                 s = mr.step_susceptibles(s, panel.births[m], peff[m], cases[m], rho,
-                                         mr.sia_immunized(s, sia[m], panel.sia_target_share, ve2))
+                                         mr.sia_immunized(s, sia[m], share(m), ve2))
         lo = max(0, t - incidence_months + 1)
         incidence = cases[lo:t + 1].sum(axis=0) / rho
         silent = ~reported[max(0, t - silent_months + 1):t + 1].any(axis=0)

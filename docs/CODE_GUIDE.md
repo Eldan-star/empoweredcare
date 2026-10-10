@@ -129,6 +129,24 @@ The agents used to call Gemini directly. Now they call a small common interface 
 - `research_agent.py`: web scraping, which is switched off.
 - `utils/pdf_utils.py` and `utils/image_utils.py`: turn PDFs into images and handle image files.
 
+### Surveillance analytics (M3)
+None of this uses AI. It is plain arithmetic and statistics, so every result can be
+checked by hand.
+
+| File | What it does |
+|---|---|
+| `services/detection/diseases.py` | The EPHI thresholds for each disease, written as data. Measles: alert at 1 suspected case; action at 5 suspected or 3 confirmed in 4 weeks; the humanitarian doubling rule; the acceptable case fatality rate |
+| `services/detection/series.py` | Weekly counts with ISO-week arithmetic. Missing weeks stay "no report", never zero |
+| `services/detection/early_rise.py` | EARS C1–C3, Poisson CUSUM and the doubling rule: warning signs that rank alerts |
+| `services/detection/thresholds.py` | Applies the rules to a unit's weeks. Gives the level (action / alert / none), the reasons with the EPHI page, flags (approaching the action threshold, case fatality, silence, completeness) and a priority score for ordering |
+| `services/risk/measles_risk.py` | The risk formulas: vaccine protection, the susceptible children balance, the reporting-rate estimate, spread from nearby places, and the 0–100 rank with its factors |
+| `services/risk/panel.py` | Runs the risk model month by month, using only data available at the time |
+| `services/risk/runner.py`, `scripts/run_risk.py` | Builds the inputs from the database and saves monthly scores to `risk_scores` |
+| `scripts/load_immunization.py` | Loads vaccination coverage (and births, campaigns) from CSV. A national row is applied to every zone |
+| `services/surveillance.py` | The database queries behind `/surveillance/detect`, `/timeseries` and `/risk` |
+| `simulation/ethiopia.py` | Simulated Ethiopian measles from IDM's laser-measles, plus a reporting layer that adds delays and gaps |
+| `evaluation/harness.py` | Scores detection and the risk index on the simulation and writes `evaluation/reports/` |
+
 ---
 
 ## 4. The frontend, folder by folder (`frontend/src/`)

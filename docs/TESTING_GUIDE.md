@@ -167,6 +167,21 @@ Set `LLM_PROVIDER=claude` and `ANTHROPIC_API_KEY=...` in `.env`, run `pip instal
 
 ---
 
+## M3 checks (analytics)
+
+1. **Update the database.** After pulling, run `alembic upgrade head`. It adds the new
+   EPHI fields: report timeliness, case classification, the rumour-log dates, and alert
+   levels.
+2. **Run the tests:** `python -m pytest tests -q`. You should see about 78 passed and 11
+   skipped.
+   - The new tests check the EPHI thresholds, the early-rise statistics against
+     hand-worked numbers, the risk formulas, the coverage loader and the risk runner.
+3. **Look at the new endpoints.** Start the backend and open http://localhost:8000/docs.
+   Find the **surveillance** endpoints. They answer with an empty list and a note until
+   weekly counts exist, which is expected: Ethiopian counts arrive after EPHI approval.
+4. **Optional: run the evaluation yourself** (docs/EVALUATION.md, "How to run it
+   yourself"). It needs a separate environment, `.venv-sim`.
+
 ## When can we start M2?
 
 When **steps 1–3 pass**. Steps 4–7 can have small issues; I'll fix those alongside M2. Send me what failed (error text or screenshots), or just say "go".

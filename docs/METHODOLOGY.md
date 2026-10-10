@@ -66,17 +66,17 @@ The questions we most want answered are collected in §11.
 
 | # | Component | Method | Status | Evidence |
 |---|---|---|---|---|
-| 4.1 | Vaccine protection | Dose-conditional effective-protection formula | Planned M3 | Established |
-| 4.2 | Susceptible pool | Monthly susceptible accumulation (TSIR-style balance) | Planned M3 | Established |
-| 4.3 | Under-reporting | Reporting rate ρ by susceptible reconstruction | Planned M3 | Established, with a known bias |
-| 4.4 | Spatial spread | Gravity importation pressure | Planned M3 | Established for measles |
+| 4.1 | Vaccine protection | Dose-conditional effective-protection formula | **Built** (M3) | Established |
+| 4.2 | Susceptible pool | Monthly susceptible accumulation (TSIR-style balance) | **Built**; weak on synthetic data (§5.1) | Established |
+| 4.3 | Under-reporting | Reporting rate ρ by susceptible reconstruction | **Built**; recovered well on synthetic data | Established, with a known bias |
+| 4.4 | Spatial spread | Gravity importation pressure | **Built** (M3) | Established for measles |
 | 4.5 | Conflict and displacement | Three explicit pathways, no multiplier | Planned M3–M5 | Supported |
-| 4.6 | Risk output | Ranked ignition-risk index, 1- and 3-month horizons | Planned M3 | Supported; to be validated |
-| 4.7 | Outbreak detection | WHO AFRO / EPHI thresholds | Planned M3 | Established (official) |
-| 4.8 | Early rise | EARS C1–C3, Poisson CUSUM | Planned M3 | Established |
+| 4.6 | Risk output | Ranked risk index, 1- and 3-month horizons | **Built**. Beats baselines for next-quarter burden; **not** for ignition (§5.1) | Supported (burden); not shown (ignition) |
+| 4.7 | Outbreak detection | EPHI alert and action thresholds | **Built** (M3) | Established (official) |
+| 4.8 | Early rise | EARS C1–C3, Poisson CUSUM, EPHI humanitarian doubling rule | **Built** (M3) | Established |
 | 4.9 | Field signals | Hierarchical geocoding, clustering, human verification | Geocoder **built**; rest M4 | Supported |
-| 4.10 | Fusion | Deterministic evidence ladder | Planned M5 | Design choice |
-| 5 | Evaluation | Synthetic data from IDM laser-measles; historical bulletins | Planned M3 | Established practice |
+| 4.10 | Fusion | EPHI levels with priority ordering | Rules **built** (M3); fusion with signals M5 | Official levels; ordering is a design choice |
+| 5 | Evaluation | Synthetic data from IDM laser-measles; historical bulletins next | Synthetic **built and run** (§5.1) | Established practice |
 | 7 | Later methods | Nowcasting; endemic–epidemic (hhh4-type); Bayesian spatio-temporal; gradient boosting; scan statistics | Deferred | Established |
 | 10 | AI uses | 16 uses with guardrails and local metrics | Mixed | Mostly hypothesis |
 
@@ -476,6 +476,52 @@ you rather see them only as evidence?
 
 ---
 
+### 5.1 First results (October 2026)
+
+Full numbers: `evaluation/reports/2026-10-10-m3-baseline.md`. Plain-language summary:
+`EVALUATION.md`.
+- **Set-up:**
+  - 400 synthetic woreda-scale units, 15 simulated years with 4 years of burn-in;
+  - five scenarios: gravity, radiation and Stouffer mixing, low reporting, and lower
+    transmission;
+  - detection is scored on data as visible each week.
+- **Thresholds:**
+  - the alert threshold catches 73–77% of outbreaks within about a week, with 80–84% of
+    alarms during true transmission;
+  - the action threshold is about 92% reliable but late: 33–36% of outbreaks (about 46%
+    of large ones) reach it within 8 weeks of onset;
+  - at 5% reporting, sensitivity falls sharply.
+- **Risk index, next-quarter burden** (top 10% vs the true top 10%):
+  - 44–53% precision, against 28–31% for lowest MCV1, 24–29% for most recent cases, and
+    10% for random;
+  - the index beats every baseline in every scenario, including mis-specified mixing.
+- **Risk index, ignition among quiet units:**
+  - no better than random or lowest MCV1;
+  - even the simulator's true susceptibles reach only 14–31%.
+- **Reconstruction:**
+  - the reporting rate is recovered well (median absolute error about 0.015 against a true
+    0.11; rank correlation 0.77–0.95);
+  - the susceptible pool is recovered poorly (rank correlation about 0.2–0.35).
+- **Consequence:** the index is shown only as "where measles will be heaviest next
+  quarter". Ignition stays internal until the susceptible estimate improves and is
+  validated on real data.
+
+### 5.2 Implementation choices a reviewer should know
+
+| Choice | Value | Why |
+|---|---|---|
+| "Within 1 month" on weekly data | Last 4 ISO weeks | Routine data is weekly; EPHI to confirm |
+| EARS standard-deviation floor | 0.5 | Zero-variance baselines are common in sparse counts |
+| Poisson CUSUM | Rolling 8-week baseline after a 2-week guard; shift 2x; h = 4 | Conventional starting values; to be tuned on real data |
+| Case-fatality flag | Above 3% with at least 10 cases in the window | Avoids flags from one death in a handful of cases |
+| Starting susceptibles | N / R0, R0 = 15 | Endemic equilibrium; burn-in reduces its influence |
+| Ageing out of the 0–14 band | S/180 per month | Assumes an even age spread of susceptibles |
+| Reporting-rate window | Rolling 96 months, pooled toward the region over 36 months | Reporting changes over years; thin data borrows strength |
+| Gravity exponents | a = 0, c = 2, 600 km cut-off | Placeholders for ranking; to be fitted on Ethiopian history |
+| Background introductions | 0.1 infection-equivalents per month | Keeps the ranking informative between epidemics |
+| Priority points within a level | Approaching action 20; each early-rise method 10 (max 4); CFR flag 20; risk index up to 30; each threat factor 5 (max 2) | Transparent ordering; to be reviewed with EPHI |
+| Simulator R0 | β × 14 days, about 8 | Starts laser-measles near its own equilibrium |
+
 ## 6. IDM, laser-measles, and why we use them the way we do
 
 ### 6.1 What IDM contributes
@@ -664,6 +710,8 @@ replace a method in this document without winning an out-of-sample backtest.
 11. **IDM:** is "simulator for evaluation now, calibrated scenario engine later" the right
     use of laser-measles?
 12. **Missing methods:** what would you expect to see that is not here?
+13. **Susceptible reconstruction:** given §5.1, which approach would you try first: a
+    state-space or Bayesian S, anchoring to coverage surveys, or fitting a full TSIR?
 
 ---
 

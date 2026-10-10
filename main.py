@@ -35,6 +35,10 @@ from services.agents import (
     ExtractionAgent, ValidationAgent, RiskAnalysisAgent, AlertGenerationAgent
 )
 from services.auth_service import AuthService
+from services import surveillance
+from services.detection import diseases as detection_diseases
+from services.detection.thresholds import evaluate as evaluate_thresholds
+from db.session import get_db
 
 from utils.pdf_utils import pdf_to_images
 from utils.security import create_access_token, decode_token
@@ -593,6 +597,69 @@ async def get_outbreak_summary(user: dict = Depends(get_current_user)):
 async def get_all_reports(user: dict = Depends(get_current_user)):
     """Get all processed reports from the data store."""
     return data_assistant.data_store
+
+# --- SURVEILLANCE ENDPOINTS (M3) ---
+# EPHI threshold detection and the measles risk index over the database
+# (docs/SYSTEM_SPEC.md sections 5, 6 and 8). Plain `def` so the database work runs in
+# FastAPI's thread pool instead of blocking the event loop.
+
+def _iso_week(week: Optional[str]):
+    """'2026-W40' or '2026W40' -> (2026, 40); None -> the last complete week."""
+    if not week:
+        return None
+    try:
+        y, w = week.upper().replace("-", "").split("W")
+        return int(y), int(w)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="week must look like 2026-W40")
+
+
+@app.get("/surveillance/timeseries")
+def surveillance_timeseries(pcode: str, disease: str = "measles", weeks: int = 52, end: Optional[str] = None,
+                            humanitarian: bool = False, user: dict = Depends(get_current_user),
+                            db=Depends(get_db)):
+    """Weekly counts for one unit (summing every unit inside it), each week evaluated
+    against the EPHI thresholds. Unreported weeks are null, not zero."""
+    try:
+        cfg = detection_diseases.get(disease)
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    series = surveillance.weekly_series(db, pcode, disease, min(max(weeks, 1), 520), _iso_week(end))
+    results = evaluate_thresholds(series, cfg, humanitarian=humanitarian) if series else []
+    return {"pcode": pcode, "disease": disease, "weeks": [
+        {"iso_year": w.iso_year, "iso_week": w.iso_week, "suspected": w.suspected, "confirmed": w.confirmed,
+         "deaths": w.deaths, "reports_expected": w.reports_expected, "reports_received": w.reports_received,
+         "level": r.level, "reasons": r.reasons, "flags": r.flags}
+        for w, r in zip(series, results)]}
+
+
+@app.get("/surveillance/detect")
+def surveillance_detect(disease: str = "measles", week: Optional[str] = None, level: int = 3,
+                        user: dict = Depends(get_current_user), db=Depends(get_db)):
+    """Every unit with recent data, at its EPHI level for the week (action threshold,
+    alert threshold, or none), ordered by level then priority."""
+    try:
+        detection_diseases.get(disease)
+    except KeyError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    wk = _iso_week(week) or surveillance.current_week()
+    units = surveillance.detect(db, disease, wk, level)
+    return {"disease": disease, "iso_year": wk[0], "iso_week": wk[1], "unit_level": level,
+            "counts": {"action": sum(u["level"] == "action" for u in units),
+                       "alert": sum(u["level"] == "alert" for u in units),
+                       "units_with_data": len(units)},
+            "units": units,
+            "note": None if units else "No weekly counts stored for this period. Counts arrive from DHIS2 (after EPHI approval) or manual entry."}
+
+
+@app.get("/surveillance/risk")
+def surveillance_risk(year: Optional[int] = None, month: Optional[int] = None,
+                      user: dict = Depends(get_current_user), db=Depends(get_db)):
+    """Stored monthly measles risk index per zone (scripts/run_risk.py computes it).
+    A ranked index, not a probability; see docs/EVALUATION.md for what it can and cannot
+    predict yet."""
+    rows = surveillance.latest_risk(db, year, month)
+    return {"zones": rows, "note": None if rows else "No risk scores stored yet. Run scripts/run_risk.py after loading coverage."}
 
 # --- CHATBOT ENDPOINTS ---
 
