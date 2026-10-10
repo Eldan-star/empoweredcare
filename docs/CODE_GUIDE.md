@@ -22,26 +22,34 @@ Browser (frontend)  ──API request──▶  Backend (main.py)  ──prompt�
         ▲                                   │
         └────────── JSON response ──────────┤
                                             ▼
-                               JSON files on disk (the "database" for now)
+                         PostgreSQL database (reports) + JSON files (users)
 ```
 
 ---
 
 ## 2. Where the data is stored
 
-Today nothing uses a real database. Everything is saved in plain JSON text files:
+Since M2, outbreak reports live in a **PostgreSQL database**. That's a proper database server; see [DATABASE_SETUP.md](DATABASE_SETUP.md) for how to install it. Some things are still in plain JSON files:
 
-| File | What is in it | Tracked in git? |
-|---|---|---|
-| `models/outbreak_data.json` | Every processed outbreak report: what was extracted, the AI's risk opinions, the alert, and the approval status | Yes |
-| `models/users.json` | User accounts. Passwords are stored **hashed**: scrambled one-way, so the original can't be read back | **No** (it holds real accounts). `users.example.json` shows the shape |
-| `data/patient_records.json` | Individual patient records entered on the data entry portal | **No** (it holds personal health data). `patient_records.example.json` shows the shape |
+| Where | What is in it |
+|---|---|
+| Database table `signals` | Every processed outbreak report: the original text, what was extracted, the AI's risk opinions and alert, who submitted it, its review status and who reviewed it |
+| Other database tables | Ready for the next steps: places with official codes (`org_units`), weekly case counts, vaccination, campaigns, alerts and risk scores. The full list is in DATABASE_SETUP.md |
+| `models/users.json` (not tracked in git) | User accounts. Passwords are stored **hashed**: scrambled one-way, so the original can't be read back |
+| `data/patient_records.json` (not tracked in git) | Individual patient records from the data entry portal |
+| `models/outbreak_data.json` | The old report file. It's only read once, by `scripts/migrate_json.py`, to copy reports into the database |
 
-**Why this matters:** JSON files are fine for a prototype. But they can't safely handle two people saving at the same instant, they slow down as they grow, and they can't easily answer questions like "cases per woreda per week". Replacing them with a PostgreSQL database is the first step of **M2**.
+**How reports are stored now.** The table definitions are in `db/models.py`. `services/signal_store.py` reads and writes them. It hands reports to the rest of the app in the same shape the old JSON file used, so the website didn't need to change. Two behaviours changed:
+- **Nothing is merged any more.** The old code merged reports from the same place and disease within 2 hours into one record, adding up the cases and losing the individual reports. Now every report is kept, and related ones share a `cluster_id`: same place and disease within 14 days.
+- **Failed analyses are flagged.** A report whose AI step failed gets `analysis_failed = true`, so `scripts/reprocess_failed.py` can find and re-run it.
+
+**Changing the tables.** Changes go through **Alembic** migrations in `migrations/versions/`. After pulling an update, `alembic upgrade head` brings your database up to date and keeps your data.
 
 **Things kept only in memory are lost when the backend restarts:**
 - chat conversation history;
 - the scheduler's last-run result.
+
+They'll move to the database later.
 
 ---
 
@@ -191,7 +199,7 @@ What happens when someone pastes *"Jinka: 12 suspected measles cases, 2 IgM posi
 
 | Gap | Effect | Fixed in |
 |---|---|---|
-| JSON files instead of a database | Can't scale; risk of lost writes with many users | M2 |
+| Users and patient records still in JSON files | Fine for a pilot team; not for many users | Later in M2 or M4 |
 | Place names are free text, not official codes | "Jinka" and "Jinka town" count as different places; map placement is approximate | M2 (geocoder with OCHA P-codes) |
 | All risk judgements are AI opinions | Not explainable or testable against ground truth | M3 (thresholds, early-rise statistics, measles susceptibility model) |
 | Consensus averaging dilutes alarms | A single HIGH can be averaged away | M5 (tier rules) |

@@ -42,7 +42,24 @@ alembic upgrade head
 
 `alembic` is the tool that creates and updates tables. When a later update changes the tables, run `alembic upgrade head` again after pulling. It only applies what's new and keeps your data.
 
-## 5. Check it (optional)
+## 5. Copy your existing reports into the database
+
+The reports you had in `models/outbreak_data.json` move over with one command. It's safe to run more than once: reports already copied are skipped, and the JSON file isn't changed.
+```
+python scripts\migrate_json.py --dry-run
+python scripts\migrate_json.py
+```
+✅ It ends with `The database now holds N reports.`
+
+From now on the app reads and writes reports in the database only.
+
+Reports whose AI analysis failed are flagged in the database. Re-run them when you have AI quota; the backend can stay running:
+```
+python scripts\reprocess_failed.py --dry-run
+python scripts\reprocess_failed.py
+```
+
+## 6. Check it (optional)
 
 ```
 python -m pytest tests -q

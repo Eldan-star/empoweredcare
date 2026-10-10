@@ -6,14 +6,13 @@ from datetime import datetime
 from typing import Dict, Any, List, Optional, Union
 from models.schemas import OutbreakReport, ValidationResult, RiskAnalysis, AlertMessage, ConsensusResult, ContextData
 from services.gemini_service import GeminiService, AIQuotaExhausted
-from config import VALID_SYMPTOMS, MAX_STORED_REPORTS, BASE_DIR, ENABLE_WEB_RESEARCH
+from config import VALID_SYMPTOMS, ENABLE_WEB_RESEARCH
+from services.signal_store import SignalStore
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Define absolute storage path
-DATA_STORE_PATH = BASE_DIR / "models" / "outbreak_data.json"
 
 class ExtractionAgent:
     def __init__(self, gemini_service: GeminiService):
@@ -472,116 +471,34 @@ class SuperAgent:
         )
 
 class DataAssistantAgent:
-    def __init__(self, gemini_service: GeminiService):
+    def __init__(self, gemini_service: GeminiService, store: Optional[SignalStore] = None):
         self.gemini = gemini_service
-        self.data_store = []
-        self.storage_path = DATA_STORE_PATH
-        self._load_data()
-        logger.info(f"Data Assistant initialized with {len(self.data_store)} reports at {self.storage_path}")
+        if store is None:
+            from db.session import SessionLocal
+            store = SignalStore(SessionLocal)
+        self.store = store
+        logger.info(f"Data Assistant initialized with {self.store.count()} reports in the database")
 
-    def _load_data(self):
-        """Load data from local storage."""
-        try:
-            import os
-            import json
-            if os.path.exists(self.storage_path):
-                with open(self.storage_path, "r") as f:
-                    self.data_store = json.load(f)
-                logger.info(f"Successfully loaded {len(self.data_store)} reports from {self.storage_path}")
-        except Exception as e:
-            logger.error(f"❌ Failed to load data store from {self.storage_path}: {e}")
-            self.data_store = []
+    @property
+    def data_store(self) -> List[Dict[str, Any]]:
+        """All reports, newest first, in the dictionary shape the API returns."""
+        return self.store.all_records()
 
-    def _save_data(self):
-        """Save data to local storage."""
-        try:
-            import json
-            import os
-            os.makedirs(os.path.dirname(self.storage_path), exist_ok=True)
-            with open(self.storage_path, "w") as f:
-                # Use default=str to handle datetime objects
-                json.dump(self.data_store, f, indent=4, default=str)
-            logger.info(f"Successfully saved {len(self.data_store)} reports to {self.storage_path}")
-        except Exception as e:
-            logger.error(f"❌ Failed to save data store to {self.storage_path}: {e}")
+    def add_report(self, report: Union[OutbreakReport, Dict[str, Any]], session_id: str = None, risk_analysis: Dict[str, Any] = None, alert: Dict[str, Any] = None, context_research: Dict[str, Any] = None, raw_report: str = "", validation: Dict[str, Any] = None, consensus: Dict[str, Any] = None, source_type: str = "report", submitted_by: str = None):
+        """Store one analysed report. Reports for the same place and disease within 14 days
+        share a cluster_id instead of being merged into one record."""
+        record = self.store.add(
+            report, session_id=session_id, raw_text=raw_report, source_type=source_type,
+            validation=validation, risk_analysis=risk_analysis, consensus=consensus,
+            context_research=context_research, alert=alert, submitted_by=submitted_by,
+        )
+        logger.info(f"Stored report {record['session_id']} for {record['extracted_data'].get('location')}")
+        return record
 
-    def add_report(self, report: Union[OutbreakReport, Dict[str, Any]], session_id: str = None, risk_analysis: Dict[str, Any] = None, alert: Dict[str, Any] = None, context_research: Dict[str, Any] = None, raw_report: str = "", validation: Dict[str, Any] = None, consensus: Dict[str, Any] = None):
-        """Add a report to the data store with full context. Groups similar reports from the same location."""
-        report_dict = report.dict() if hasattr(report, "dict") else report
-        location = report_dict.get("location", "Unknown")
-        disease = (risk_analysis or {}).get("possible_disease", "Unknown")
-        
-        # Check for existing report for the SAME location and SAME disease added very recently (e.g. 2 hours)
-        # to avoid separating related data points (User requirement: "dont separete")
-        found_existing = False
-        now = datetime.now()
-        
-        for existing in self.data_store:
-            try:
-                # Parse existing timestamp
-                existing_time = datetime.fromisoformat(existing["timestamp"])
-                time_diff = (now - existing_time).total_seconds() / 3600 # hours
-                
-                if (existing["extracted_data"].get("location") == location and 
-                    (existing.get("risk_analysis") or {}).get("possible_disease") == disease and
-                    time_diff < 2): # Within 2 hours
-                    
-                    logger.info(f"Merging report into existing cluster for {location}")
-                    # Update cases
-                    existing["extracted_data"]["cases"] += report_dict.get("cases", 0)
-                    # Merge symptoms
-                    existing_symptoms = set(existing["extracted_data"].get("symptoms", []))
-                    new_symptoms = set(report_dict.get("symptoms", []))
-                    existing["extracted_data"]["symptoms"] = list(existing_symptoms.union(new_symptoms))
-                    # Update raw report to include both
-                    existing["raw_report"] = (existing.get("raw_report", "") + "\n---\n" + raw_report).strip()
-                    # Update timestamp to latest activity
-                    existing["timestamp"] = str(now)
-                    found_existing = True
-                    break
-            except Exception as e:
-                logger.error(f"Error checking existing report for merge: {e}")
-                continue
-
-        if not found_existing:
-            # Add metadata for dashboard
-            entry = {
-                "session_id": session_id or str(uuid.uuid4()),
-                "extracted_data": report_dict,
-                "validation": validation,
-                "risk_analysis": risk_analysis or {"risk_level": "LOW"},
-                "consensus": consensus,
-                "context_research": context_research,
-                "alert": alert or {"title": "New Report"},
-                "status": "pending",
-                "created_at": str(now),
-                "timestamp": str(now),
-                "raw_report": raw_report
-            }
-            self.data_store.insert(0, entry) # Newest first
-
-        # Ensure we don't exceed max reports
-        if len(self.data_store) > MAX_STORED_REPORTS:
-            self.data_store = self.data_store[:MAX_STORED_REPORTS]
-        
-        # Sort by location to keep same-location data together in storage (User requirement: "stor eon same place")
-        # But keep newest reports at the top for each location
-        self.data_store.sort(key=lambda x: (x["extracted_data"].get("location", ""), x["timestamp"]), reverse=True)
-        
-        self._save_data()
-        logger.info(f"Added/Updated report in data store. Total records: {len(self.data_store)}")
-
-    def update_report_status(self, session_id: str, status: str):
+    def update_report_status(self, session_id: str, status: str, reviewer: str = None):
         """Update the approval status of a report."""
-        found = False
-        for r in self.data_store:
-            if r["session_id"] == session_id:
-                r["status"] = status
-                found = True
-                break
-        
+        found = self.store.set_status(session_id, status, reviewer)
         if found:
-            self._save_data()
             logger.info(f"Updated status for session {session_id} to {status}")
         return found
 
@@ -589,9 +506,10 @@ class DataAssistantAgent:
         """Answer queries about outbreak data."""
         logger.info(f"Processing query: {query_text}")
 
-        total_reports = len(self.data_store)
-        locations = list(set(r["extracted_data"]["location"] for r in self.data_store if r["extracted_data"]["location"] != "Unknown"))
-        total_cases = sum(r["extracted_data"].get("cases", 0) for r in self.data_store)
+        records = self.data_store
+        total_reports = len(records)
+        locations = list(set(r["extracted_data"].get("location") for r in records if r["extracted_data"].get("location") not in (None, "Unknown")))
+        total_cases = sum(r["extracted_data"].get("cases") or 0 for r in records)
 
         data_summary = {
             "total_reports": total_reports,
@@ -609,7 +527,7 @@ class DataAssistantAgent:
         {json.dumps(data_summary, indent=2)}
         
         DETAILED ENTRIES (Most Recent):
-        {json.dumps([r["extracted_data"] for r in self.data_store[-10:]] if self.data_store else [], indent=2)}
+        {json.dumps([r["extracted_data"] for r in records[:10]], indent=2)}
         
         INSTRUCTIONS:
         1. IDENTITY: You are part of Empowered Care. 
@@ -639,13 +557,13 @@ class DataAssistantAgent:
 
     def get_historical_context(self, location: str = None) -> str:
         """Get a summarized text of historical data for AI comparison."""
-        if not self.data_store:
+        relevant_data = self.store.all_records(limit=None if location else 20)
+        if not relevant_data:
             return "No historical data available."
-        
+
         # Filter by location if specified
-        relevant_data = self.data_store
         if location:
-            relevant_data = [r for r in self.data_store if r["extracted_data"]["location"] == location]
+            relevant_data = [r for r in relevant_data if r["extracted_data"].get("location") == location]
         
         # Limit to last 20 relevant records to provide more depth
         summary_data = []
@@ -654,8 +572,8 @@ class DataAssistantAgent:
                 "date": r["extracted_data"].get("date") or r.get("timestamp"),
                 "cases": r["extracted_data"].get("cases"),
                 "symptoms": r["extracted_data"].get("symptoms"),
-                "risk": r["risk_analysis"].get("risk_level"),
-                "disease": r["risk_analysis"].get("possible_disease")
+                "risk": (r["risk_analysis"] or {}).get("risk_level"),
+                "disease": (r["risk_analysis"] or {}).get("possible_disease")
             })
         
         return json.dumps(summary_data)
@@ -664,7 +582,8 @@ class DataAssistantAgent:
         """Perform a deep analysis comparing new data with historical trends."""
         logger.info("Performing full system analysis and comparison...")
         
-        if not self.data_store:
+        records = self.store.all_records(limit=25)
+        if not records:
             return {
                 "status": "No data available",
                 "analysis": "No data points collected yet for analysis.",
@@ -672,8 +591,8 @@ class DataAssistantAgent:
             }
 
         # Newest are at the beginning (index 0)
-        new_data = [r["extracted_data"] for r in self.data_store[:5]]
-        old_data = [r["extracted_data"] for r in self.data_store[5:25]] # Compare with next 20
+        new_data = [r["extracted_data"] for r in records[:5]]
+        old_data = [r["extracted_data"] for r in records[5:25]] # Compare with next 20
 
         prompt = f"""
         You are a Senior Epidemiological Analyst. Perform a full system analysis.
@@ -705,7 +624,7 @@ class DataAssistantAgent:
             response = await loop.run_in_executor(None, self.gemini.generate_text, prompt)
             analysis_result = json.loads(response)
             analysis_result["timestamp"] = str(datetime.now())
-            analysis_result["data_points_analyzed"] = len(self.data_store)
+            analysis_result["data_points_analyzed"] = self.store.count()
             return analysis_result
         except AIQuotaExhausted:
             raise  # surfaced to the user as 'AI quota reached', not stored as an analysis
@@ -797,15 +716,16 @@ class ChatSupervisor:
             agent_key = "general"
             
         # 2. Prepare data context (Enhanced with a more complete summary)
-        total_reports = len(self.data_assistant.data_store)
-        locations = list(set(r["extracted_data"]["location"] for r in self.data_assistant.data_store if r["extracted_data"]["location"] != "Unknown"))
-        total_cases = sum(r["extracted_data"].get("cases", 0) for r in self.data_assistant.data_store)
+        records = self.data_assistant.data_store
+        total_reports = len(records)
+        locations = list(set(r["extracted_data"].get("location") for r in records if r["extracted_data"].get("location") not in (None, "Unknown")))
+        total_cases = sum(r["extracted_data"].get("cases") or 0 for r in records)
         
         data_summary = {
             "total_system_reports": total_reports,
             "aggregate_cases": total_cases,
             "monitored_locations": locations,
-            "most_recent_entries": [r["extracted_data"] for r in self.data_assistant.data_store[-15:]] if self.data_assistant.data_store else []
+            "most_recent_entries": [r["extracted_data"] for r in records[:15]]
         }
         data_context = json.dumps(data_summary, indent=2)
         

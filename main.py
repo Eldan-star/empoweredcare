@@ -399,7 +399,9 @@ async def process_outbreak_report(
                 context_research=result["context_research"].model_dump(mode='json') if result.get("context_research") and hasattr(result["context_research"], "model_dump") else result.get("context_research"),
                 raw_report=text,
                 validation=result["validation"].model_dump(mode='json') if hasattr(result["validation"], "model_dump") else result["validation"],
-                consensus=result["consensus"].model_dump(mode='json') if hasattr(result["consensus"], "model_dump") else result["consensus"]
+                consensus=result["consensus"].model_dump(mode='json') if hasattr(result["consensus"], "model_dump") else result["consensus"],
+                source_type="report",
+                submitted_by=user["email"],
             )
 
             response_list.append(OutbreakProcessResponse(
@@ -492,7 +494,9 @@ async def upload_outbreak_file(
                 context_research=result["context_research"].model_dump(mode='json') if result.get("context_research") and hasattr(result["context_research"], "model_dump") else result.get("context_research"),
                 raw_report=extracted_text,
                 validation=result["validation"].model_dump(mode='json') if hasattr(result["validation"], "model_dump") else result["validation"],
-                consensus=result["consensus"].model_dump(mode='json') if hasattr(result["consensus"], "model_dump") else result["consensus"]
+                consensus=result["consensus"].model_dump(mode='json') if hasattr(result["consensus"], "model_dump") else result["consensus"],
+                source_type="upload",
+                submitted_by=user["email"],
             )
 
             response_list.append(OutbreakProcessResponse(
@@ -533,7 +537,7 @@ async def approve_alert(
     logger.info(f"Alert {status} for session {session_id}")
     
     # Update status in persistent store
-    success = data_assistant.update_report_status(session_id, status)
+    success = data_assistant.update_report_status(session_id, status, reviewer=user["email"])
     
     if not success:
         raise HTTPException(status_code=404, detail="Report session not found")
@@ -569,16 +573,17 @@ async def query_outbreak_data(
 async def get_outbreak_summary(user: dict = Depends(get_current_user)):
     """Get a summary of all outbreak reports."""
     try:
-        total_reports = len(data_assistant.data_store)
-        locations = list(set(r["extracted_data"]["location"] for r in data_assistant.data_store if r["extracted_data"]["location"] != "Unknown"))
-        total_cases = sum(r["extracted_data"].get("cases", 0) for r in data_assistant.data_store)
+        records = data_assistant.data_store
+        total_reports = len(records)
+        locations = list(set(r["extracted_data"].get("location") for r in records if r["extracted_data"].get("location") not in (None, "Unknown")))
+        total_cases = sum(r["extracted_data"].get("cases") or 0 for r in records)
 
         return {
             "total_reports": total_reports,
             "total_cases": total_cases,
             "locations": locations,
             "timestamp": str(datetime.now()),
-            "data_points": len(data_assistant.data_store)
+            "data_points": total_reports
         }
     except Exception as e:
         logger.error(f"❌ Summary error: {e}")
