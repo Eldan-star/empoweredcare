@@ -55,7 +55,7 @@ logger.info("🚀 Starting Empowered Care Unified System...")
 # Initialize FastAPI app
 app = FastAPI(
     title=API_TITLE,
-    description="AI-powered disease outbreak detection and medical document processing",
+    description="Outbreak intelligence and early warning for Ethiopian public health (pilot disease: measles). Report intake, place resolution to official codes, and surveillance data; see docs/SYSTEM_SPEC.md.",
     version=API_VERSION
 )
 
@@ -244,7 +244,7 @@ async def get_analysis_status(user: dict = Depends(get_current_user)):
 async def root():
     """Health check endpoint."""
     return {
-        "message": "Empowered Care - Unified Multi-Agent System",
+        "message": "Empowered Care - Outbreak Intelligence API",
         "status": "running",
         "version": API_VERSION
     }

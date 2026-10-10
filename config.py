@@ -21,7 +21,7 @@ def get_session_dir(session_id: str):
 # API Settings
 API_HOST = "0.0.0.0"
 API_PORT = 8000
-API_TITLE = "Empowered Care - Multi-Agent Disease Outbreak Detection System"
+API_TITLE = "Empowered Care - Outbreak Intelligence for Ethiopia"
 API_VERSION = "1.0.0"
 
 # Security Settings

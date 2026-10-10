@@ -77,10 +77,10 @@ async def send_reset_password_email(email: str, token: str, frontend_url: Option
     """Send a password reset email."""
     base_url = frontend_url or FRONTEND_URL
     reset_link = f"{base_url}/reset-password?token={token}"
-    subject = "Reset Your Password - Aegis Lite"
+    subject = "Reset Your Password - Empowered Care"
     content = f"""Hello,
 
-You have requested to reset your password for your Aegis Lite account.
+You have requested to reset your password for your Empowered Care account.
 Please click the link below to reset your password:
 
 {reset_link}
