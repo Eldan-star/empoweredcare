@@ -2,14 +2,16 @@
 Read OCHA administrative boundaries (COD-AB) and turn them into org_units rows plus
 an adjacency table.
 
-Accepted inputs: a zipped shapefile (as downloaded from HDX), a .shp file, or a
-GeoJSON file, one per admin level. Column names are matched case-insensitively and
-cover both COD-AB styles: ADM2_PCODE / ADM2_EN and adm2_pcode / adm2_name.
+Accepted inputs: the all-levels zip HDX serves (eth_admin_boundaries.shp.zip, levels
+picked automatically), a zip or .shp per level, or a GeoJSON file per level. Column
+names are matched case-insensitively and cover both COD-AB styles: ADM2_PCODE /
+ADM2_EN and adm2_pcode / adm2_name.
 """
 
 import io
 import json
 import math
+import re
 import zipfile
 from dataclasses import dataclass, field
 from datetime import date
@@ -36,17 +38,35 @@ class Unit:
     valid_from: Optional[date] = None
 
 
-def _features_from_shapefile(path: Path) -> Iterable[tuple[dict, dict]]:
+_LEVEL_IN_NAME = re.compile(r"adm(?:in)?(\d)(?:_|$)", re.I)
+
+
+def shapefile_levels_in_zip(path: Path) -> dict[int, str]:
+    """{admin level: member stem} for the per-level shapefiles inside a zip, e.g.
+    eth_admin1.shp -> 1. Lines, points and capitals layers are ignored."""
+    with zipfile.ZipFile(path) as z:
+        stems = [n[:-4] for n in z.namelist() if n.lower().endswith(".shp")]
+    out = {}
+    for stem in stems:
+        m = _LEVEL_IN_NAME.search(Path(stem).name)
+        if m:
+            out[int(m[1])] = stem
+    return out
+
+
+def _features_from_shapefile(path: Path, member: Optional[str] = None) -> Iterable[tuple[dict, dict]]:
     import shapefile  # pyshp
 
     if path.suffix.lower() == ".zip":
         with zipfile.ZipFile(path) as z:
-            shp = [n for n in z.namelist() if n.lower().endswith(".shp")]
-            if len(shp) != 1:
-                raise ValueError(f"{path.name}: expected one .shp inside the zip, found {shp or 'none'}")
-            stem = shp[0][:-4]
-            parts = {ext: io.BytesIO(z.read(stem + ext)) for ext in (".shp", ".shx", ".dbf")
-                     if stem + ext in z.namelist()}
+            stems = [n[:-4] for n in z.namelist() if n.lower().endswith(".shp")]
+            if member is None:
+                if len(stems) != 1:
+                    raise ValueError(f"{path.name} holds several layers ({len(stems)} .shp files); "
+                                     "pass it with --boundaries so the levels are picked automatically")
+                member = stems[0]
+            parts = {ext: io.BytesIO(z.read(member + ext)) for ext in (".shp", ".shx", ".dbf")
+                     if member + ext in z.namelist()}
             reader = shapefile.Reader(shp=parts[".shp"], shx=parts.get(".shx"), dbf=parts[".dbf"],
                                       encoding="utf-8", encodingErrors="replace")
     else:
@@ -61,11 +81,11 @@ def _features_from_geojson(path: Path) -> Iterable[tuple[dict, dict]]:
         yield f.get("properties") or {}, f["geometry"]
 
 
-def read_features(path: Path) -> list[tuple[dict, BaseGeometry]]:
+def read_features(path: Path, member: Optional[str] = None) -> list[tuple[dict, BaseGeometry]]:
     path = Path(path)
     suffix = path.suffix.lower()
     if suffix in (".zip", ".shp"):
-        raw = _features_from_shapefile(path)
+        raw = _features_from_shapefile(path, member)
     elif suffix in (".geojson", ".json"):
         raw = _features_from_geojson(path)
     else:
@@ -108,12 +128,14 @@ def units_from_features(features: list[tuple[dict, BaseGeometry]], level: int) -
                 f"(columns found: {sorted(props)})"
             )
         parent = _pick(props, f"ADM{level - 1}_PCODE", f"adm{level - 1}_pcode") if level > 1 else None
-        aliases = [a for a in (
-            _pick(props, f"ADM{level}_REF", f"adm{level}_ref"),
-            _pick(props, f"ADM{level}ALT1EN", f"adm{level}_alt1en"),
-            _pick(props, f"ADM{level}ALT2EN", f"adm{level}_alt2en"),
-            _pick(props, f"ADM{level}_AM", f"adm{level}_name1"),  # Amharic names where provided
-        ) if a and a != name]
+        # Other names OCHA provides: reference and alternative names, and the same name
+        # in other languages (Amharic, Afaan Oromo, ...) in adm{n}_name1..3.
+        raw_aliases = [_pick(props, c) for c in (
+            f"ADM{level}_REF", f"adm{level}_ref_n", f"ADM{level}ALT1EN", f"ADM{level}ALT2EN",
+            f"adm{level}_alt_n", f"adm{level}_name1", f"adm{level}_name2", f"adm{level}_name3", f"ADM{level}_AM",
+        )]
+        aliases = [a.strip() for raw in raw_aliases if raw for a in re.split(r"[;|]", raw)
+                   if a.strip() and a.strip() != name]
         units.append(Unit(pcode=pcode, name=name, level=level, parent_pcode=parent, geometry=geom,
                           aliases=sorted(set(aliases)),
                           valid_from=_parse_date(_pick(props, "validOn", "valid_on", "date"))))

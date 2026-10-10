@@ -61,22 +61,52 @@ python scripts\reprocess_failed.py
 
 ## 6. Load Ethiopia's official boundaries (OCHA)
 
-These give the app the official list of regions, zones and woredas with their codes (P-codes). Two things depend on it: the geocoder, which turns "Jimma zone, Seka Chekorsa" into a woreda code, and the M5 map.
+These give the app the official list of regions, zones and woredas with their codes (P-codes), plus each woreda's population. Two things depend on it: the geocoder, which turns "Jimma zone, Seka Chekorsa" into a woreda code, and the M5 map.
 
-1. In your browser, open https://data.humdata.org/dataset/cod-ab-eth and download the boundary files: the shapefile zip(s) for admin levels 1, 2 and 3. If one zip holds all levels, extract it and use the level 1/2/3 `.shp` files.
-2. Optionally, download the population table from https://data.humdata.org/dataset/cod-ps-eth (a CSV with `ADM3_PCODE` and a total-population column).
-3. Check first, then load. Use your file names:
-   ```
-   python scripts\load_boundaries.py --adm1 eth_admbnda_adm1.zip --adm2 eth_admbnda_adm2.zip --adm3 eth_admbnda_adm3.zip --population eth_admpop_adm3.csv --dry-run
-   python scripts\load_boundaries.py --adm1 eth_admbnda_adm1.zip --adm2 eth_admbnda_adm2.zip --adm3 eth_admbnda_adm3.zip --population eth_admpop_adm3.csv
-   ```
-   ✅ It reports how many regions, zones and woredas it loaded, and how many neighbouring pairs it found.
-4. Attach codes to the reports already stored, then restart the backend so new reports get codes too:
-   ```
-   python scripts\geocode_signals.py
-   ```
+**1. Make a folder for the downloads** inside the project (git ignores it):
+```
+mkdir data\boundaries
+```
+That's `C:\Users\danie\Documents\GitHub\Empoweredcare\empoweredcare\data\boundaries`.
 
-If a place name fits more than one woreda (some woreda names repeat across regions), it's **flagged as ambiguous** with the candidates listed. It is never guessed. If the loader says it can't find `ADM3_PCODE` / `ADM3_EN` columns, send me the column list it prints.
+**2. Download two files into that folder.** In your browser, choose "Save as", or move them from Downloads afterwards:
+
+| Page | File to download | Size |
+|---|---|---|
+| https://data.humdata.org/dataset/cod-ab-eth | `eth_admin_boundaries.shp.zip` | ~21 MB |
+| https://data.humdata.org/dataset/cod-ps-eth | `table_eth_codps_2026.xlsx` | ~150 KB |
+
+- **Leave the zip as it is.** The loader reads it directly and picks out the region, zone and woreda layers.
+- **No conversion is needed.** The Excel file is read directly.
+- **You don't need:** the `.gdb.zip` and `.geojson.zip` files (the same boundaries in other formats), `eth_admin_boundaries.xlsx` (a list of names), or the 2022/2023 population files. Those older population files use pre-2023 codes and match only 908 of the 1,148 woredas.
+
+**3. Check, then load.** The backend can keep running:
+```
+python scripts\load_boundaries.py --boundaries data\boundaries\eth_admin_boundaries.shp.zip --population data\boundaries\table_eth_codps_2026.xlsx --dry-run
+python scripts\load_boundaries.py --boundaries data\boundaries\eth_admin_boundaries.shp.zip --population data\boundaries\table_eth_codps_2026.xlsx
+```
+✅ It should report:
+```
+Loaded: 15 regions, 107 zones, 1148 woredas
+Neighbouring pairs: 26 between regions, 281 between zones, 2963 between woredas
+Population matched for 1148 units.
+Extra spellings attached from place_aliases.csv: 10.
+```
+It takes about a minute, mostly working out which woredas share a border.
+
+**4. Attach codes to the stored reports:**
+```
+python scripts\geocode_signals.py --all
+```
+
+**5. Restart the backend** (Ctrl+C, then `uvicorn main:app --port 8000`). It reads the boundaries only when it starts, so new reports get codes once it's restarted.
+
+**About place names.**
+- If a name fits more than one woreda (some names repeat across regions), it's **flagged** with the candidates listed. It is never guessed.
+- **`data/place_aliases.csv`** lists common spellings that OCHA writes differently (Haramaya → Haro Maya, Jijiga → Jigjiga). Add a line when you find a new one, then rerun steps 3–5.
+- **`data/historical_units.csv`** lists names from before boundary changes (SNNPR, and South Omo before Ari zone was created), so older reports still resolve.
+
+**About population.** The OCHA table is CSA's official projection, about 111.6 million in total. UN and WorldPop estimates are higher (around 130 million). The risk model in M3 will use one source consistently.
 
 ## 7. Check it (optional)
 

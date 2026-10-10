@@ -1,0 +1,5 @@
+name,level,current_pcodes,note
+SNNPR,1,ET07;ET08;ET11;ET16,"Southern Nations, Nationalities and Peoples' Region; split 2020-2023 into Sidama, South West Ethiopia, Central Ethiopia and South Ethiopia"
+SNNP,1,ET07;ET08;ET11;ET16,"Short form of SNNPR"
+Southern Nations,1,ET07;ET08;ET11;ET16,"Short form of SNNPR"
+South Omo,2,ET0812;ET0805,"South Omo zone before the 2023 split that created Ari zone (Jinka is now in Ari)"

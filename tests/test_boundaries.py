@@ -119,3 +119,38 @@ def test_loading_into_the_database_and_geocoding_a_report(tmp_path, db, engine):
     unresolved = store.add(OutbreakReport(location="Somewhere else", cases=1))
     assert unresolved["pcode"] is None
     assert store.regeocode() == {"resolved": 0, "ambiguous": 0, "unmatched": 1}
+
+
+def test_all_levels_zip_and_excel_population(tmp_path, db):
+    """The files as HDX serves them today: one zip with every level, and the 2026 COD-PS
+    workbook whose sheet uses admin3_pcod / Total and carries a grand-total row."""
+    import pandas as pd
+    from services.boundaries import shapefile_levels_in_zip
+    adm1, _, adm3, _ = make_files(tmp_path)
+    combined = tmp_path / "eth_admin_boundaries.shp.zip"
+    with zipfile.ZipFile(combined, "w") as out:
+        for src, level in ((adm1, 1), (adm3, 3)):
+            with zipfile.ZipFile(src) as z:
+                for n in z.namelist():
+                    out.writestr(n.replace(f"eth_adm{level}", f"eth_admin{level}"), z.read(n))
+        out.writestr("eth_adminlines.shp", b"")  # other layers must be ignored
+    levels = shapefile_levels_in_zip(combined)
+    assert levels == {1: "eth_admin1", 3: "eth_admin3"}
+
+    book = tmp_path / "table_eth_codps_2026.xlsx"
+    with pd.ExcelWriter(book) as w:
+        pd.DataFrame({"note": ["read me"]}).to_excel(w, sheet_name="READ ME", index=False)
+        pd.DataFrame({"admin3Name": ["Woreda A", "Woreda B", None], "admin3_pcod": ["ET040701", "ET040702", None],
+                      "Total": [120500, 98000, 218500]}).to_excel(w, sheet_name="COD_PS", index=False)
+    loader = load_script("load_boundaries")
+    assert loader.read_population(book) == {"ET040701": 120500, "ET040702": 98000}
+
+    aliases = tmp_path / "aliases.csv"
+    aliases.write_text("pcode,alias,note\nET040701,Woreda Alpha,old name\n", encoding="utf-8")
+    zone = write_geojson(tmp_path / "z.geojson", [({"adm2_pcode": "ET0407", "adm2_name": "Jimma", "adm1_pcode": "ET04"},
+                                                   square(36.0, 7.0, 1.0))])
+    loader.load(db, {1: (combined, levels[1]), 2: zone, 3: (combined, levels[3])},
+                loader.read_population(book), "test", loader.read_aliases(aliases))
+    db.commit()
+    assert "Woreda Alpha" in db.get(OrgUnit, "ET040701").aliases
+    assert db.get(OrgUnit, "ET040702").population == 98000

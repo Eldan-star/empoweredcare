@@ -28,6 +28,7 @@ numpy==1.26.4
 opencv-python-headless==4.11.0.86
 pdf2image==1.17.0
 pillow==10.4.0
+openpyxl==3.1.5  # reading OCHA population tables (.xlsx)
 
 # Database (M2)
 SQLAlchemy==2.0.48
