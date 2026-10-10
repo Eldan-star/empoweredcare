@@ -70,7 +70,6 @@ This file defines every **endpoint**, the addresses the frontend can call, and w
 | `/outbreak/approve/{id}` | A human approves or rejects an AI alert | Admins only |
 | `/outbreak/chat`, `/outbreak/query` | Ask questions about the stored data | Signed-in users |
 | `/patient/record(s)` | The data entry portal's patient records | Signed-in users |
-| `/process` | Reads scanned medical documents with layout detection. **Broken:** the model file `models/doclayout_yolo_ft.pt` is not in the repo. No page in the website calls it | Signed-in users |
 | `/health` | "Is the server alive?" It doesn't check whether the AI key works | Anyone |
 
 The "who can use them" column is enforced by two small functions near the top of `main.py`:
@@ -119,7 +118,6 @@ The agents used to call Gemini directly. Now they call a small common interface 
   - **When every model is out of quota,** the website shows "AI quota reached" (HTTP 503) instead of hanging, and nothing half-analysed is saved.
 - `scripts/reprocess_failed.py`: a one-off tool that re-runs stored records whose AI analysis failed and replaces the failed analysis in place.
 - `email_service.py`: sends invite and reset emails. It needs the SMTP settings in `.env` (SMTP is the standard for sending email).
-- `ocr_engine.py`, `layout_detector.py`, `preprocessor.py`, `structurer.py`: the scanned-document pipeline behind `/process`. These are heavy, so they only load the first time `/process` is used.
 - `research_agent.py`: web scraping, which is switched off.
 - `utils/pdf_utils.py` and `utils/image_utils.py`: turn PDFs into images and handle image files.
 
@@ -198,6 +196,6 @@ What happens when someone pastes *"Jinka: 12 suspected measles cases, 2 IgM posi
 | All risk judgements are AI opinions | Not explainable or testable against ground truth | M3 (thresholds, early-rise statistics, measles susceptibility model) |
 | Consensus averaging dilutes alarms | A single HIGH can be averaged away | M5 (tier rules) |
 | Chat history and scheduler state live in memory | Lost on restart | M2 |
-| `/process` scanned-document endpoint | Fails without its model file; nothing in the website uses it | Your decision: upload the weights or remove it |
+| Scanned-document reading on local servers | The old cloud pipeline (`/process`) was removed in M2 | Planned: open-weight model on-premises (SYSTEM_SPEC 11.1) |
 | No automated tests for the pipeline | Changes could break things unnoticed | M2 onward (pytest suite) |
 | The old `test_*.py` scripts at the repo root | Manual scripts that need a running server and a real API key; not an automated test suite | Will be replaced by `tests/` |

@@ -41,7 +41,7 @@ Verified by reading the code; file references are to the repository at this revi
 - LLM extraction of messy text, CSV, PDF and image reports into structured records
   (`services/agents.py: ExtractionAgent`, `main.py /outbreak/upload`). This becomes the
   extraction core for event-based surveillance.
-- Document vision pipeline (Gemini Vision, PaddleOCR fallback) in `main.py /process`.
+- Document vision pipeline (Gemini Vision, PaddleOCR fallback) in `main.py /process`. *(Removed in M2; see 11.1.)*
 
 **The intelligence layer is entirely LLM prompting**
 - No statistical, machine-learning or predictive model exists anywhere.
@@ -316,10 +316,56 @@ correctly).
 |---|---|---|
 | Alert-triage classifier (logistic regression / XGBoost) | Needs labelled verdicts | A few hundred officer verdicts |
 | Fitted gravity parameters; endemic-epidemic (hhh4-style) model; XGBoost risk | Needs real multi-year history | EPHI DHIS2 access |
-| Photo OCR of paper forms | Error-prone on handwriting | Accuracy measured on real forms |
+| Photo OCR of paper forms (see 11.1) | Error-prone on handwriting; the old cloud pipeline was removed | Accuracy measured on real forms |
 | SMS / Telegram / eCHIS channels | Governance and channel choice | EPHI interviews and agreement |
 | Disease #2 (cholera/AWD, zoonoses) and One Health data | Measles pilot first | Pilot results |
 | Feeds out to CHAP and WHO PDX | Needs a stable engine | After Phase 1 |
+
+### 11.1 Sovereign, on-premises document processing (decided October 2026)
+
+**What changed.** The old document pipeline (`POST /process`: YOLO layout detection,
+then PaddleOCR, then Gemini Vision) was removed at the start of M2. Its model weights
+were never in the repository, it pulled several GB of packages (PyTorch, PaddlePaddle,
+NVIDIA libraries) that fail to install on ordinary PCs, and no page used it. Uploads of
+images and PDF pages still work through Gemini vision in `/outbreak/upload`.
+
+**Target design.**
+- **Model:** an open-weight vision-language model (VLM) running on infrastructure in
+  Ethiopia, for example in the EPHI data centre, so documents never leave the country.
+  The Qwen2.5-VL family is a candidate; choose the best open model available at
+  implementation time by benchmark, not by name.
+- **Serving:** Ollama for a single workstation, or vLLM for a shared GPU server.
+- **Integration:** it plugs in behind the `LLMProvider` interface (`services/llm.py`),
+  so the agents do not change.
+
+**Prerequisites and open risks. Each must be resolved before adoption.**
+1. **The interface is text-only today.** `LLMProvider` has `generate_text` and
+   `generate_json`. Image reading bypasses it and calls
+   `GeminiService.generate_vision_text` directly. Step one is to add a
+   `generate_vision(images, prompt)` method and route uploads through it. Any local
+   model needs this.
+2. **Script and handwriting accuracy is unproven.** Forms are written in Amharic and
+   Tigrinya (Ge'ez script) and Afaan Oromo (Latin script), often by hand. Accuracy of
+   open VLMs on handwritten Ge'ez is not established.
+   - *Acceptance test:* a labelled sample of real Ethiopian forms, measured by
+     character error rate and by exact-match accuracy on case counts and dates.
+   - *Why the bar is high:* a misread digit can trip, or hide, an outbreak threshold
+     (section 6).
+3. **Hardware is needed.**
+   - A 7B-class VLM needs a GPU with roughly 16 GB of memory at 16-bit precision
+     (about half that when quantized).
+   - 70B-class models need a multi-GPU server.
+   - Budget, hosting and maintenance must be agreed with EPHI.
+4. **Sovereignty is wider than documents.** Today every text agent sends report text,
+   which can identify patients, to a cloud model (Gemini). If EPHI requires data
+   residency, the text agents also need a local open-weight model.
+   - This works through the same `LLMProvider` interface. vLLM and Ollama both expose
+     an OpenAI-compatible endpoint, so one adapter covers both.
+   - Confirm the requirement in the data-governance questions of
+     `docs/INTERVIEW_GUIDE.md`.
+
+**Trigger to start:** EPHI confirms its data-residency requirement, a labelled sample
+of forms is available, and the GPU hardware is identified.
 
 ---
 

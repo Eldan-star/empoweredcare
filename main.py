@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Empowered Care - Unified Multi-Agent Disease Outbreak Detection & Document Processing System
+Empowered Care - Multi-Agent Disease Outbreak Detection System
 """
 
 import logging
@@ -26,7 +26,6 @@ from models.schemas import (
     OutbreakProcessResponse, QueryResponse, ChatRequest, ChatResponse,
     UserRole, UserInvite, UserAcceptInvite, PasswordResetRequest,
     PasswordResetConfirm, ChangePassword, Token, User, UserBase,
-    ProcessResponse, Detection,
     PatientRecord, PatientRecordResponse, VitalSigns
 )
 from services.gemini_service import GeminiService, AIQuotaExhausted
@@ -36,16 +35,12 @@ from services.agents import (
     ExtractionAgent, ValidationAgent, RiskAnalysisAgent, AlertGenerationAgent
 )
 from services.auth_service import AuthService
-from services.preprocessor import Preprocessor
-from services.structurer import Structurer
 
 from utils.pdf_utils import pdf_to_images
-from utils.image_utils import image_to_base64, draw_boxes, save_all_versions
 from utils.security import create_access_token, decode_token
 from config import (
     API_TITLE, API_VERSION, LOG_LEVEL, LOG_FORMAT, ALLOWED_ORIGINS, 
     MAX_TEXT_LENGTH, MAX_QUERY_LENGTH, ACCESS_TOKEN_EXPIRE_MINUTES,
-    get_session_dir
 )
 
 # Configure logging
@@ -113,10 +108,6 @@ try:
     gemini_service = GeminiService()  # vision/OCR calls
     llm = get_llm(gemini_service)      # text agents; LLM_PROVIDER selects the vendor
     
-    # Lazy load or optional services
-    ocr_engine = None
-    layout_detector = None
-    
     logger.info("✅ Gemini service initialized")
 except Exception as e:
     logger.error(f"❌ Failed to initialize core services: {e}")
@@ -178,23 +169,6 @@ async def start_scheduler():
 async def stop_scheduler():
     scheduler.shutdown()
     logger.info("⏰ Scheduler stopped")
-
-# Helper functions for lazy loading
-def get_ocr_engine():
-    global ocr_engine
-    if ocr_engine is None:
-        logger.info("🔍 Loading OCR Engine...")
-        from services.ocr_engine import OCREngine  # heavy (PaddleOCR); imported on first use
-        ocr_engine = OCREngine()
-    return ocr_engine
-
-def get_layout_detector():
-    global layout_detector
-    if layout_detector is None:
-        logger.info("🔍 Loading Layout Detector...")
-        from services.layout_detector import LayoutDetector  # heavy (YOLO); imported on first use
-        layout_detector = LayoutDetector()
-    return layout_detector
 
 logger.info("✅ Empowered Care initialization complete!")
 
@@ -387,130 +361,6 @@ async def get_me(user: dict = Depends(get_current_user)):
         "role": user["role"],
         "created_at": user["created_at"]
     }
-
-# --- DOCUMENT PROCESSING ENDPOINT (from legacy main.py) ---
-
-@app.post("/process", response_model=ProcessResponse)
-async def process_document(
-    file: UploadFile = File(...),
-    user: dict = Depends(get_current_user)
-):
-    """Process a medical document (Image or PDF) using YOLO layout detection and Gemini Vision."""
-    if not file.content_type.startswith(("image/", "application/pdf")):
-        raise HTTPException(status_code=400, detail="Only images and PDF files are allowed")
-    
-    # Load document processing services
-    detector = get_layout_detector()
-    ocr = get_ocr_engine()
-
-    content = await file.read()
-    session_id = str(uuid.uuid4())
-    session_dir = get_session_dir(session_id)
-
-    logger.info(f"--- 🚀 Starting Processing Session: {session_id} ---")
-    logger.info(f"📁 Input File: {file.filename} ({file.content_type})")
-    
-    # Convert PDF or Image
-    content_type = (file.content_type or "").lower()
-    if content_type == "application/pdf" or file.filename.lower().endswith(".pdf"):
-        logger.info("📄 Converting PDF to images...")
-        images = pdf_to_images(content)
-        if not images:
-            raise HTTPException(status_code=400, detail="Failed to convert PDF into images for processing.")
-    else:
-        nparr = np.frombuffer(content, np.uint8)
-        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-        if img is None:
-            raise HTTPException(status_code=400, detail="Uploaded file is not a valid image or PDF.")
-        images = [img]
-
-    final_annotated = None
-    raw_text_total = ""
-    num_regions = 0
-    all_crops = []
-    all_enhanced = []
-    all_detections = []
-    final_structured_record = None
-    
-    for page_idx, img in enumerate(images):
-        logger.info(f"📸 Page {page_idx + 1}/{len(images)}...")
-        original_img = img.copy()
-
-        # Step 1: Layout Detection
-        logger.info("🔍 Scanning Layout...")
-        boxes, confs, labels = detector.detect(img)
-        logger.info(f"📍 Detected {len(boxes)} regions.")
-
-        # Step 2: Intelligent Cropping
-        process_img = original_img.copy()
-        if len(boxes) > 0:
-            boxes_sorted = sorted(zip(boxes, confs, labels), key=lambda x: (x[0][2]-x[0][0]) * (x[0][3]-x[0][1]), reverse=True)
-            best_box, best_conf, best_label = boxes_sorted[0]
-            
-            x1, y1, x2, y2 = map(int, best_box)
-            h, w = original_img.shape[:2]
-            x1, y1 = max(0, x1-10), max(0, y1-10)
-            x2, y2 = min(w, x2+10), min(h, y2+10)
-            process_img = original_img[y1:y2, x1:x2]
-            
-            for box, conf, label in boxes_sorted:
-                all_detections.append(Detection(label=label, confidence=round(float(conf), 3), box=list(map(float, box))))
-        
-        final_annotated = draw_boxes(img.copy(), boxes, confs, labels)
-        
-        # Step 3: High-Accuracy Vision Pass (Gemini)
-        logger.info("🧠 Clinical Brain Pass (Gemini)...")
-        temp_img_path = session_dir / f"page_{page_idx}_focused.jpg"
-        cv2.imwrite(str(temp_img_path), process_img)
-        
-        try:
-            structured_record = gemini_service.process_medical_record(temp_img_path)
-            num_regions += 1
-            raw_text_total += f"[Page_{page_idx+1}] Extracted successfully via Gemini.\n"
-            # Keep track of the results for all pages (or at least the first valid one)
-            if final_structured_record is None:
-                final_structured_record = structured_record
-        except Exception as e:
-            logger.warning(f"⚠️ Gemini failed on page {page_idx}: {e}. Running local OCR fallback...")
-            # Fallback logic...
-            page_text = ""
-            for i, (box, conf, label) in enumerate(zip(boxes, confs, labels)):
-                x1, y1, x2, y2 = map(int, box)
-                region = img[y1:y2, x1:x2]
-                enhanced = Preprocessor.enhance(region)
-                text, conf_ocr = ocr.extract(enhanced)
-                page_text += f"[{label}] {text}\n"
-            
-            raw_text_total += page_text
-            if final_structured_record is None:
-                final_structured_record = Structurer.structure(page_text, 0.7)
-
-    # Save visualization products
-    if final_annotated is not None:
-        save_all_versions(session_dir, original_img, final_annotated, all_crops, all_enhanced)
-
-    annotated_b64 = image_to_base64(final_annotated) if final_annotated is not None else ""
-
-    logger.info(f"--- ✨ Session Complete: {session_id} ---")
-
-    if final_structured_record is None:
-        raise HTTPException(status_code=400, detail="Failed to extract structured data from any page.")
-
-    return ProcessResponse(
-        record=final_structured_record,
-        detections=all_detections,
-        annotated_image_base64=annotated_b64,
-        raw_ocr_text=raw_text_total.strip(),
-        session_id=session_id,
-        metadata={
-            "num_regions": num_regions,
-            "processed_at": str(datetime.now()),
-            "total_pages": len(images),
-            "file_type": file.content_type,
-            "engine": "Gemini-1.5-Flash"
-        },
-        message="✅ Processing completed successfully using Gemini Vision."
-    )
 
 # --- OUTBREAK DETECTION ENDPOINTS ---
 

@@ -49,6 +49,11 @@ conversations into decisions about the build. Each conversation is 30–45 minut
 - Do you see facility-level PHEM data in DHIS2, or only woreda totals?
 - How long does it take from a facility's weekly report to it being visible to you?
 - Who approves data access for a pilot, and what would they need to see first?
+- **Data governance:** may report text or images that can identify patients be processed
+  by a cloud AI service outside Ethiopia (for example Google's), or must all processing
+  stay on servers in Ethiopia? Does the answer change for de-identified or aggregate data?
+- Does EPHI (or the Ministry) have a data centre or GPU server that could host an
+  AI model, and who would operate it?
 
 **EIOS / media monitoring**
 - Does anyone scan Amharic, Afaan Oromo, Somali or Tigrinya media today? How?
@@ -84,6 +89,7 @@ conversations into decisions about the build. Each conversation is 30–45 minut
 | Bulletins/sitreps take many hours a week | Move the sitrep generator earlier |
 | EPI would act on a monthly risk ranking | Make the risk map the headline product for the first demo |
 | Thresholds differ from WHO AFRO defaults | Update `config` thresholds and the fusion ladder |
+| Identifiable data must stay in Ethiopia | Run the text and vision models on-premises through `LLMProvider` (SYSTEM_SPEC 11.1); until then process only de-identified text in the cloud |
 | Nobody would act on a signal without a phone call | Add a "call the reporter" step to the triage workflow |
 
 ## Decision log (fill in after each interview)

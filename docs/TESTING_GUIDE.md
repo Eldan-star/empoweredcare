@@ -26,8 +26,8 @@ Tick the boxes as you go. If anything fails, copy the error text, or take a scre
 3. Copy `.env.example` to `.env` and fill in:
    - `SECRET_KEY`: any long random string. Generate one with `python -c "import secrets; print(secrets.token_hex(32))"`.
    - `GEMINI_API_KEY`: your Google AI key.
-4. **Install the backend.** Use **Python 3.12**. Some of the pinned packages, such as numpy 1.26.4 and pillow 10.4.0, have no ready-made downloads for newer versions like Python 3.14. On those, pip tries to build them from source code, which fails unless you have a C compiler installed. Choose one:
-   - **Quick install (recommended for testing).** This is enough for everything except the broken scanned-document endpoint, and I tested that the server starts with it.
+4. **Install the backend.** Use **Python 3.12**. Some of the pinned packages, such as numpy 1.26.4 and pillow 10.4.0, have no ready-made downloads for newer versions like Python 3.14. On those, pip tries to build them from source code, which fails unless you have a C compiler installed.
+   - Create and activate a virtual environment, then install from `requirements.txt` (about 0.5 GB).
      Windows (PowerShell):
      ```
      py -3.12 -m venv .venv
@@ -41,9 +41,9 @@ Tick the boxes as you go. If anything fails, copy the error text, or take a scre
      ```
      Your prompt should now start with `(.venv)`. If it doesn't, stop: pip would install into your computer's main Python instead. Then, on any system:
      ```
-     pip install fastapi==0.115.0 "uvicorn[standard]==0.30.6" python-multipart==0.0.9 python-jose==3.5.0 passlib==1.7.4 bcrypt==4.0.1 python-dotenv==1.0.1 google-genai==2.29.0 pydantic==2.12.5 email-validator==2.3.0 APScheduler==3.11.2 aiosmtplib==5.1.0 pandas numpy==1.26.4 opencv-python-headless==4.11.0.86 pdf2image==1.17.0 pillow==10.4.0 openpyxl==3.1.5 aiofiles
+     pip install -r requirements.txt
      ```
-   - **Full install:** `pip install -r requirements.txt`. This pulls in PyTorch and NVIDIA GPU packages (several GB), and **those packages won't install on a Mac**.
+     Optional extras (the Claude provider, web research) are in `requirements-optional.txt`.
    - For **PDF uploads** you also need Poppler, a PDF tool installed outside Python:
      - Mac: `brew install poppler`
      - Ubuntu: `sudo apt install poppler-utils`
@@ -153,19 +153,9 @@ Then check that the results show up elsewhere:
 
 ---
 
-## Step 8 — A decision for you
-
-The backend endpoint `/process`, for scanned medical documents with layout detection, fails because its model file (`models/doclayout_yolo_ft.pt`) was never added to the repo. **No page in the website uses it**: the website's "Process a report" page uses a different endpoint that works. You have two options:
-- whoever trained that model adds the file, and I make sure it works; or
-- we remove the endpoint and its heavy dependencies, which would also shrink `requirements.txt` by several GB.
-
-I recommend removing it for now. Measles surveillance in Phase 1 doesn't need it, and photo reading is deferred in the plan anyway.
-
----
-
 ## Optional — Try Claude instead of Gemini
 
-Set `LLM_PROVIDER=claude` and `ANTHROPIC_API_KEY=...` in `.env`, run `pip install anthropic`, restart the backend, and repeat step 3. Compare the extraction accuracy on the same reports.
+Set `LLM_PROVIDER=claude` and `ANTHROPIC_API_KEY=...` in `.env`, run `pip install anthropic==1.11.0` (or `pip install -r requirements-optional.txt`), restart the backend, and repeat step 3. Compare the extraction accuracy on the same reports.
 
 **Why:** it's a cheap way to see which model extracts Ethiopian place names and counts more reliably before we depend on one.
 

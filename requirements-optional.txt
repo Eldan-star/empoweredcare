@@ -1,0 +1,7 @@
+# Optional features. Install only what you switch on:  pip install -r requirements-optional.txt
+
+# LLM_PROVIDER=claude
+anthropic==1.11.0
+
+# ENABLE_WEB_RESEARCH=true (web scraping for location context; off by default)
+Crawl4AI==0.8.6
