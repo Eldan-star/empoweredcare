@@ -39,10 +39,10 @@ The questions we most want answered are collected in §11.
 ## 1. Design principles
 
 1. **Statistics produce the numbers; AI handles language and does the compiling.**
-   - Every threshold, index and alert tier comes from a stated formula or rule that can be
+   - Every threshold, index and alert level comes from a stated formula or rule that can be
      re-run and audited.
    - AI models read, extract, search, summarise, draft and orchestrate.
-   - AI never sets an alert tier and never invents a number (§10).
+   - AI never sets an alert level and never invents a number (§10).
 2. **Thresholds first.** A crossing of an official outbreak threshold is never downgraded
    by any model, AI or statistical.
 3. **Ranked index, not a probability.** The risk output is a ranking until it has been
@@ -258,7 +258,7 @@ ranking without being auditable.
 |---|---|---|
 | 1. Vaccination disruption | Coverage reduced in affected units for affected months. The size comes from administrative data where available, else a sensitivity range | `P_eff` and `SIA_t` (§4.1–4.2), so the susceptible pool grows with a lag |
 | 2. Surveillance degradation | Falls in reporting completeness and long zero runs during conflict mark the unit **surveillance-quality: low** | Shown as "data unreliable", never as "all clear"; ρ is not re-estimated across the break |
-| 3. Threat / priority factor | Active conflict and large displacement shown as a named factor, as in the WHO/CDC measles programmatic risk tool | Raises priority within a fusion tier (§4.10) and appears in explanations; never changes the index number |
+| 3. Threat / priority factor | Active conflict and large displacement shown as a named factor, as in the WHO/CDC measles programmatic risk tool | Raises priority within an alert level (§4.10) and appears in explanations; never changes the index number |
 
 **Data.**
 - IOM DTM first (displacement figures by woreda).
@@ -362,7 +362,10 @@ span months, late reports.
 
 **Limitations.**
 - With sparse counts (most woredas report zero most weeks), EARS can over-alarm.
-- Flags therefore produce **YELLOW** (verify) only, never higher on their own.
+- Flags therefore only raise priority within a level (§4.10). They never set a level.
+- Because a single suspected case is already an alert under EPHI rules, early-rise
+  methods matter most for ranking alerts, for the humanitarian rule, and for diseases
+  whose thresholds are baseline-based (malaria, meningitis).
 
 **Validation.**
 - Unit tests computed by hand from the published definitions.
@@ -403,26 +406,32 @@ signals for human verification.
 
 ### 4.10 Fusion: the evidence ladder
 
-| Tier | Condition |
-|---|---|
-| **RED** | Confirmed-outbreak threshold crossed |
-| **ORANGE** | Suspected-outbreak threshold crossed, **or** a verified field cluster |
-| **YELLOW** | Early-rise flag, unverified trigger, or bulletin / ReliefWeb mention |
+The levels use the EPHI PHEM Guideline's terms [40]. Red, orange and yellow are not used,
+because EPHI reserves them for PHEOC activation levels.
 
-- Modifiers raise priority within a tier and are shown as evidence:
-  - high risk index;
+| Level | Condition (measles) |
+|---|---|
+| **Action threshold** | ≥5 suspected or ≥3 confirmed (lab or epi-linked) in the area within 1 month |
+| **Alert threshold** | ≥1 suspected case; in humanitarian settings, double the 3-week average |
+| **Signal** | Community trigger, rumour, bulletin or media report awaiting verification |
+
+- **Priority within a level** comes from evidence, shown with the alert:
+  - the risk index;
+  - early-rise flags;
+  - approaching the action threshold;
   - surveillance silence;
+  - case fatality above 3%;
   - threat factors.
-- A high index **plus** a verified signal raises YELLOW to ORANGE.
-- Nothing lowers a threshold-based tier.
+- **No statistic or index changes a level.** Levels come only from EPHI's rules applied to
+  counts. A verified signal becomes an alert only when a facility case meets the standard
+  case definition.
 
 **Status of evidence.**
-- This is a design choice, not an estimated model. It mirrors how verification-tiered
-  event-based surveillance is run.
-- Thresholds of the ladder will be reviewed with EPHI.
+- The levels are EPHI's official thresholds.
+- The priority ordering within a level is a design choice. It will be reviewed with EPHI.
 
-**Question for the reviewer.** Is "high index + verified signal → ORANGE" defensible, or
-should the index never change a tier?
+**Question for the reviewer.** Is ranking within a level by these factors useful, or would
+you rather see them only as evidence?
 
 ---
 
@@ -584,7 +593,7 @@ AI may:
 - summarise and draft.
 
 AI may not:
-- set an alert tier;
+- set an alert level;
 - declare an outbreak;
 - compute a statistic inside a prompt;
 - present a number that is not traceable to a stored record or a re-runnable
@@ -603,7 +612,7 @@ assume it.
 | 3 | **Ask the data** | Answers questions over stored records | Answers cite records | Spot-checked correctness | **Built**; to be upgraded by #9 |
 | 4 | **Grounded explanations** | "Why this place, why now" from stored factors | Only stored evidence JSON is in context; citations required | Reviewer rating; unsupported-claim rate | M5 |
 | 5 | **Sitrep compiler** | Drafts the weekly situation report from all streams: alerts, counts, signals, context, OSINT | Every number is pulled by code, not written by the model; officer approves | Time saved; error count per sitrep | M5 |
-| 6 | **OSINT monitor** | Reads ReliefWeb / WHO AFRO / bulletins daily; extracts event, place, date; de-duplicates against stored signals | Output is YELLOW at most; links to the source | Precision / recall vs manual review | M4 |
+| 6 | **OSINT monitor** | Reads ReliefWeb / WHO AFRO / bulletins daily; extracts event, place, date; de-duplicates against stored signals | Output is a **signal** at most; links to the source | Precision / recall vs manual review | M4 |
 | 7 | **Bulletin digitiser** | Converts printed EPHI bulletin tables into indicator rows | Row totals checked against printed totals; mismatches go to review | Cell accuracy | M4 |
 | 8 | **Guideline assistant (retrieval over the EPHI manuals)** | Answers "what is the case definition / threshold / response step" with page citations; drafts disease-module configurations from the manuals | Must quote the source passage; a person signs off configurations | Citation accuracy | M4 (after manuals are added) |
 | 9 | **Analyst copilot** | Turns a question into a SQL query or chart over the database ("woredas with falling completeness and rising suspected cases") | Read-only database role; the generated query is shown | Query correctness on a test set | M5 |
@@ -631,7 +640,7 @@ replace a method in this document without winning an out-of-sample backtest.
 | Hallucinated numbers or places | Numbers come from code; places from the geocoder; citations required |
 | Data sovereignty (patient-identifiable text sent to a cloud model) | `LLMProvider` interface allows an on-premises open-weight model (SYSTEM_SPEC §11.1) |
 | Quota or outage | Statistical pipeline runs without AI; AI features degrade with a clear message (built) |
-| Automation bias | AI output is labelled as AI; tiers stay rule-based; verdicts recorded |
+| Automation bias | AI output is labelled as AI; levels stay rule-based; verdicts recorded |
 | Language bias (weaker performance in Ethiopian languages) | Measure accuracy per language before relying on it |
 
 ---
@@ -646,7 +655,8 @@ replace a method in this document without winning an out-of-sample backtest.
 5. **Spatial coupling:** gravity as the default for Ethiopia?
 6. **Conflict:** do the three pathways cover what matters? Add crowding effects in
    displacement sites?
-7. **Fusion:** may a high index plus a verified signal raise YELLOW to ORANGE?
+7. **Fusion:** is ranking within EPHI's alert and action levels by risk, early-rise and
+   context factors useful?
 8. **Early rise:** zone-level only, given sparse woreda counts?
 9. **Evaluation:** which mis-specification scenarios would make a synthetic evaluation
    convincing?

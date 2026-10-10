@@ -29,7 +29,7 @@ alerts and forward-looking risk for national (EPHI) and regional (RHB) epidemiol
 |---|---|---|
 | **Predict** | Ranked measles ignition-risk index per zone | Susceptible accumulation + gravity importation pressure (§5) |
 | **Detect** | Threshold crossings and early-rise flags every week | WHO/EPHI outbreak thresholds; EARS C1–C3, Poisson CUSUM (§6) |
-| **Fuse** | One tiered alert per place and week, with its evidence | Deterministic evidence ladder (§8) |
+| **Fuse** | One level per place and week (action threshold / alert threshold / signal), with its evidence | EPHI thresholds as a deterministic ladder (§8) |
 | **Explain** | "Why this place, why now", draft situation reports | LLM grounded only in stored evidence (§9) |
 
 A thin feedback loop (Verify / Duplicate / Dismiss on every signal and alert) collects
@@ -96,7 +96,7 @@ are JSONB in Postgres.
 | `campaigns` | Supplementary immunization activity | `unit`, `start_date`, `age_min_months`, `age_max_months`, `coverage` |
 | `signals` | One event-based report | `source_type` (`intake`, `bulletin`, `reliefweb`, `manual`), `raw_text`, `extracted` (JSON), `unit`, `geocode_confidence`, `ambiguous`, `cluster_id`, `status`, `verdict`, `verified_by` |
 | `risk_scores` | Unit × month | `S`, `rho`, `p_eff`, `lambda`, `index`, `factors` (JSON) |
-| `alerts` | Unit × disease × week | `tier`, `evidence` (JSON), `status`, `verdict` |
+| `alerts` | Unit × disease × week | `level` (`action` / `alert` / `signal`), `priority`, `evidence` (JSON), `status`, `verdict` |
 | `evaluations` | One evaluation run | `config`, `metrics` (JSON), `created_at` |
 
 Weekly case counts and monthly immunization data live in separate tables because they
@@ -241,7 +241,7 @@ Conflict acts through three named pathways:
    unreliable", never as "all clear", and ρ is not estimated across the break.
 3. **Threat / priority factor.** Active conflict and large displacement are shown as a
    named factor, like the threat category of the WHO/CDC measles programmatic risk tool.
-   This factor raises priority within a fusion tier (§8). It never changes the index
+   This factor raises priority within an alert level (§8). It never changes the index
    number.
 
 **Data:**
@@ -273,9 +273,7 @@ measles.
 | Case fatality flag | Above 3% in an outbreak | PHEM Guideline 2022, Table 4-5 (acceptable case fatality rate) |
 
 - **"Specified area":** woreda or facility catchment by default. EPHI to confirm.
-- **Proposed change to the alert ladder (awaiting decision):** the two triggers of the
-  action threshold are one EPHI rule, and our RED/ORANGE/YELLOW colours clash with the PHEOC
-  activation levels. See `EPHI_ALIGNMENT.md` §1.
+- **Levels:** these thresholds define the action and alert levels of the evidence ladder (§8).
 
 ### 6.3 Early-rise flags (sub-threshold)
 - **EARS C1, C2, C3** (US CDC): compare the current count with the mean and standard
@@ -307,7 +305,7 @@ Phase 1 sources:
    - Past bulletins also form a historical test set (§10).
    - Bulletins are irregular and late, so they are a lagging source, not a live feed.
 3. **ReliefWeb API, WHO AFRO bulletins, WHO Disease Outbreak News** for Ethiopia and its
-   neighbours. These give context and cross-border signals, and produce at most YELLOW.
+   neighbours. These give context and cross-border signals, and produce at most a **signal**.
 
 Community triggers have low positive predictive value: about 6% in an evaluation in Doolo
 zone (`METHODOLOGY.md` §4.9). Verification is therefore part of the design, not an
@@ -337,20 +335,32 @@ must be measured on real forms first) and any channel-specific bot.
 
 ---
 
-## 8. Fuse — the evidence ladder
+## 8. Fuse — the evidence ladder (EPHI levels, decided October 2026)
 
-A clinical or laboratory threshold crossing is never downgraded for lack of
+The levels use the EPHI PHEM Guideline's own terms. The colours red, orange and yellow are
+**not** used for these levels, because EPHI uses them for PHEOC activation levels (PHEOC
+Handbook 2022 §9.1.4). A threshold crossing is never downgraded for lack of
 corroboration.
 
-| Tier | Condition | Expected action |
+| Level | Condition (measles) | Expected action (PHEM Guideline 2022, Annex 6) |
 |---|---|---|
-| **RED** | Confirmed-outbreak threshold crossed | Outbreak response |
-| **ORANGE** | Suspected-outbreak threshold crossed, **or** a verified field cluster | Investigate within 48 hours |
-| **YELLOW** | Early-rise flag, unverified field trigger, or bulletin/ReliefWeb mention | Verify |
+| **Action threshold** | ≥5 suspected **or** ≥3 confirmed (IgM-positive or epi-linked) in the area within 1 month | Outbreak response: supplementary vaccination in low-coverage areas, community mobilisation, vitamin A |
+| **Alert threshold** | ≥1 suspected case; in humanitarian settings, double the average of the last 3 weeks | Report to the next level, collect blood samples, treat, investigate |
+| **Signal** | A community trigger, rumour, bulletin or media report not yet verified | Verify. Health extension workers verify within 1 hour; events are verified within 24 hours |
 
-Modifiers — a high ignition-risk index, a surveillance-silent unit, conflict or
-displacement — raise priority *within* a tier and are shown as evidence. A high index
-plus a verified signal raises YELLOW to ORANGE. Modifiers never lower a tier.
+- **Priority within a level.** These raise priority within a level and are shown as
+  evidence:
+  - the risk index;
+  - early-rise statistics (EARS, CUSUM);
+  - approaching the action threshold (3–4 suspected, or 2 confirmed);
+  - surveillance silence;
+  - case fatality above 3%;
+  - conflict and displacement.
+- **Nothing outside the rules changes a level.** No statistic or index raises or lowers a
+  level. A verified signal becomes an alert only when it meets the facility case
+  definition.
+- **Other diseases** use their own alert and action thresholds from PHEM Guideline 2022,
+  Table 4-5.
 
 ---
 
@@ -490,7 +500,7 @@ unnecessary are **retired**, with the reason.
 | Idea | Decision | Future design | When |
 |---|---|---|---|
 | **SMS gateway for health extension workers (HEWs)** | **Keep** | <ul><li>An SMS adapter on `POST /intake/trigger`, through a short code with Ethio Telecom or an aggregator.</li><li>Two message forms:<ul><li>a short coded syntax, for example `MSL 4 0 KEBELE-NAME` (trigger, cases, deaths, place), parsed by rules with no AI;</li><li>free text, parsed by the extraction agent and confirmed back to the sender by SMS ("Received: 4 suspected measles, Dubluk. Reply 1 to confirm").</li></ul></li><li>USSD menus are an alternative for structured entry.</li><li>Works on any phone without mobile data.</li></ul> | After the EPHI interviews settle the channel (SMS vs Telegram vs eCHIS, §7). The intake API it plugs into is M4 |
-| **Two-way SMS to officers: alert notices and a daily or weekly digest** | **Keep** | <ul><li>A RED or ORANGE alert sends an SMS to the responsible woreda and zone officers, who acknowledge it by reply.</li><li>A short digest of top alerts per area is sent on a schedule.</li><li>Acknowledgement time feeds the 7-1-7 "notify" metric.</li></ul> | With M5 alerts, through the same gateway |
+| **Two-way SMS to officers: alert notices and a daily or weekly digest** | **Keep** | <ul><li>An action- or alert-threshold crossing sends an SMS to the responsible woreda and zone officers, who acknowledge it by reply.</li><li>A short digest of top alerts per area is sent on a schedule.</li><li>Acknowledgement time feeds the 7-1-7 "notify" metric.</li></ul> | With M5 alerts, through the same gateway |
 | **Offline working** | **Reshape** | <ul><li>The data-entry pages become an installable web app that saves reports on the device and sends them when a connection returns.</li><li>The SMS path already works without data.</li><li>This replaces the old idea of a sync agent on a woreda laptop: a second server to maintain at every woreda is not realistic.</li></ul> | After M5, once the field workflow is agreed |
 | **"Safe capture": never lose input when AI is down** | **Keep. Partly built** | <ul><li>Raw input is stored first, and AI processing follows.</li><li>**Built:** analyses that fail partway are flagged and re-run by `scripts/reprocess_failed.py`.</li><li>**Gap:** when AI quota runs out, or extraction fails completely, the report is not stored and must be resubmitted.</li><li>**To do:** store the raw input first, then queue it for automatic retry.</li></ul> | M4 |
 

@@ -73,8 +73,8 @@ conversations into decisions about the build. Each conversation is 30–45 minut
   program), or only on paper?
 - Which "specified area" do you use for the measles action threshold: woreda, kebele or
   facility catchment?
-- Would you prefer our alert levels to use the PHEM terms (alert / action / signal)? Should
-  RED/ORANGE/YELLOW stay reserved for PHEOC activation?
+- We use the PHEM terms (alert / action / signal) for our levels and keep
+  red/orange/yellow for PHEOC activation. Does that read naturally to you?
 - Is the humanitarian measles alert (double the 3-week average) applied in IDP sites today?
 - How far has CEBS been integrated into eCHIS? Is there an API?
 - Do woredas enter facility weekly reports into DHIS2 on the facilities' behalf?

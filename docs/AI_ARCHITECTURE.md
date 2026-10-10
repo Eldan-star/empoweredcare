@@ -7,7 +7,7 @@ nothing here claims more than the code does._
 The rule throughout:
 
 > **AI reads, extracts, compiles and explains. Statistics produce the numbers and alert
-> tiers. People verify.**
+> levels. People verify.**
 
 ---
 
@@ -21,7 +21,7 @@ organised by job. It does not mean independent experts checking each other.
 |---|---|---|---|
 | **Extraction** | Turns messy text, CSV, PDF pages and images into structured reports (place, symptoms, cases, dates), splitting a message that covers several reports | Built | Kept. It becomes the core of field-signal and SMS intake |
 | **Validation** | One AI call judges plausibility | Built | Reshaped into rules (impossible counts, missing fields, future dates, duplicates), with AI only explaining failures. Today it marks a report valid if the AI call fails, which is a known flaw |
-| **Risk (four perspectives)** | One AI call returns four opinions (symptoms, statistical, historical, environmental), which are averaged into HIGH/MEDIUM/LOW | Built | **Retired at M5.** A language model's own confidence is not calibrated, and averaging dilutes a single alarm. Replaced by the statistical risk index and alert tiers |
+| **Risk (four perspectives)** | One AI call returns four opinions (symptoms, statistical, historical, environmental), which are averaged into HIGH/MEDIUM/LOW | Built | **Retired at M5.** A language model's own confidence is not calibrated, and averaging dilutes a single alarm. Replaced by the statistical risk index and EPHI alert levels |
 | **Alert writer** | Drafts the alert text | Built | Officer-facing drafts only. Public messages belong to EPHI risk communication |
 | **Ask the data** (chat supervisor plus Location / Infection / History / General prompts) | Answers questions using the most recent reports (up to 10–15, depending on the page) | Built | Becomes the analyst copilot: generated, read-only database queries and charts, with the query shown |
 | **Web research** | Scraped search-engine pages for local context | Off by default | **Retired.** Replaced by official data sources (ReliefWeb, IOM DTM, UCDP/ACLED, WHO AFRO) |
@@ -37,7 +37,7 @@ give opinions. The full table, with guardrails and how each will be measured, is
 `METHODOLOGY.md` §10. The main ones are:
 - **Sitrep compiler:** drafts the weekly situation report. Numbers are inserted by code.
 - **OSINT monitor:** reads ReliefWeb and WHO AFRO daily, extracts events, removes
-  duplicates, and raises a YELLOW alert at most.
+  duplicates, and raises a **signal** at most.
 - **Bulletin digitiser:** turns printed EPHI bulletin tables into data and checks them
   against the printed totals.
 - **Guideline assistant:** answers from the EPHI manuals, quoting page and passage.
@@ -75,7 +75,7 @@ Planned, as listed above:
 - matching places to official codes;
 - outbreak thresholds;
 - risk numbers (from M3);
-- alert tiers (from M5).
+- alert levels (from M5).
 
 These are fixed rules and formulas that can be re-run and audited.
 

@@ -61,9 +61,9 @@ emergency operations center's activation**. Our design used RED / ORANGE / YELLO
 An EPHI officer seeing "RED" in our tool would read "Level 1 PHEOC activation", which is a
 national crisis. That misreading is a real safety and credibility problem.
 
-**Recommendation:** use EPHI's own words for our ladder, and keep the colours for the PHEOC.
+**Decided (October 2026):** our ladder uses EPHI's own words, and the colours stay with the PHEOC.
 
-| Proposed level | Condition (measles) | EPHI basis |
+| Level | Condition (measles) | EPHI basis |
 |---|---|---|
 | **Action threshold** | ≥5 suspected or ≥3 confirmed (lab or epi-linked) in the area within 1 month | PHEM 2022 Table 4-5 |
 | **Alert threshold** | ≥1 suspected case; or, in humanitarian settings, double the 3-week average | PHEM 2022 Tables 4-5 and 4-6 |
@@ -73,9 +73,8 @@ national crisis. That misreading is a real safety and credibility problem.
   surveillance silence and threat factors all become **priority and evidence within a
   level**. They are never a level of their own. This keeps our rule that nothing lowers a
   threshold-based level.
-- **Open question:** should "high risk index + verified signal" still raise a signal to
-  alert? Since a single suspected case is already an alert under EPHI rules, the case for
-  that upgrade is weaker. I suggest dropping it.
+- **Decided:** the "high risk index + verified signal" upgrade is dropped. A single
+  suspected case is already an alert under EPHI rules, so no statistic changes a level.
 
 ### 1.3 Measles is immediately reportable, so case-based data is the fast data
 
@@ -213,8 +212,8 @@ The full table is PHEM 2022 pp. 67–70. Humanitarian variants are on p. 71.
    program), or only on paper?
 2. Which "specified area" do you use for the measles action threshold: woreda, kebele, or
    facility catchment?
-3. Would you prefer our levels to use the PHEM terms (alert / action / signal)? Confirm that
-   the RED/ORANGE/YELLOW colours should stay reserved for PHEOC activation.
+3. We use the PHEM terms (alert / action / signal) and keep red/orange/yellow for PHEOC
+   activation. Does that read naturally?
 4. Is the humanitarian alert rule (double the 3-week average) applied in IDP sites today?
 5. How far has CEBS been integrated into eCHIS? Is there an API?
 6. Do woredas enter facility weekly reports into DHIS2 on the facilities' behalf? This

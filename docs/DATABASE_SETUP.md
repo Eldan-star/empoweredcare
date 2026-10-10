@@ -141,6 +141,6 @@ These tables are created by `alembic upgrade head`. Their definitions are in `db
 | `immunization` | Monthly measles vaccination per unit |
 | `campaigns` | Vaccination campaigns |
 | `signals` | Every submitted report, upload or field alert, with the AI's reading and its review status |
-| `alerts` | Tiered alerts (red/orange/yellow), from M5 |
+| `alerts` | Alerts at EPHI levels (action threshold / alert threshold / signal), from M5 |
 | `risk_scores` | Monthly measles risk per unit, from M3 |
 | `evaluations` | Results of model testing runs, from M3 |

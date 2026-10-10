@@ -19,11 +19,11 @@ and why.**
 |---|---|---|
 | **Predict** | A monthly ranking of zones by measles ignition risk | Susceptible build-up plus spread from neighbouring zones |
 | **Detect** | Outbreak-threshold crossings and early rises | WHO/EPHI thresholds; EARS and CUSUM statistics |
-| **Fuse** | One tiered alert (RED / ORANGE / YELLOW) per place and week, with its evidence | Fixed rules; a threshold crossing is never downgraded |
+| **Fuse** | One level per place and week, in EPHI's terms (action threshold / alert threshold / signal), with its evidence | EPHI thresholds as fixed rules; a crossing is never downgraded |
 | **Explain** | "Why this place, why now", and draft situation reports | AI writing only from stored evidence, with citations |
 
 > **The rule for AI:** AI reads, extracts, compiles and explains. Statistics produce the
-> numbers and the alert tiers. People verify.
+> numbers and the alert levels. People verify.
 
 ## Status (October 2026)
 
@@ -49,7 +49,7 @@ and why.**
 |---|---|
 | M3 | Measles risk model, outbreak detection, and testing on simulated Ethiopian outbreaks (IDM's laser-measles) |
 | M4 | Community trigger intake, the review page for incoming signals, ReliefWeb / WHO AFRO / IOM DTM feeds, bulletin digitiser, assistant over the EPHI guidelines |
-| M5 | Tiered alerts, an interactive woreda map, situation-report drafting |
+| M5 | Alerts at EPHI levels, an interactive woreda map, situation-report drafting |
 | Later | SMS reporting for health extension workers, SMS alerts to officers, offline data entry, learned models, more diseases, One Health data |
 
 **Today's risk level is a placeholder.** The current HIGH/MEDIUM/LOW risk on each report
@@ -61,7 +61,7 @@ is replaced by the statistical risk index in M3–M5.
 ```
 Text / CSV / PDF / image ──► AI extraction ──► place-name resolver ──► PostgreSQL ──► dashboard, records, chat
                                                 (OCHA P-codes)          (signals)
-DHIS2 weekly counts ──(after EPHI approval)──► indicator tables ──► [M3] detection + risk ──► [M5] tiered alerts
+DHIS2 weekly counts ──(after EPHI approval)──► indicator tables ──► [M3] detection + risk ──► [M5] alerts (EPHI levels)
 ```
 
 - **Backend:** Python 3.12, FastAPI, SQLAlchemy and Alembic, PostgreSQL.

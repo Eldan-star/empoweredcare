@@ -202,7 +202,7 @@ What happens when someone pastes *"Jinka: 12 suspected measles cases, 2 IgM posi
 | Users and patient records still in JSON files | Fine for a pilot team; not for many users | Later in M2 or M4 |
 | Place names are free text, not official codes | "Jinka" and "Jinka town" count as different places; map placement is approximate | M2 (geocoder with OCHA P-codes) |
 | All risk judgements are AI opinions | Not explainable or testable against ground truth | M3 (thresholds, early-rise statistics, measles susceptibility model) |
-| Consensus averaging dilutes alarms | A single HIGH can be averaged away | M5 (tier rules) |
+| Consensus averaging dilutes alarms | A single HIGH can be averaged away | M5 (EPHI alert levels) |
 | Chat history and scheduler state live in memory | Lost on restart | M2 |
 | Scanned-document reading on local servers | The old cloud pipeline (`/process`) was removed in M2 | Planned: open-weight model on-premises (SYSTEM_SPEC 11.1) |
 | No automated tests for the pipeline | Changes could break things unnoticed | M2 onward (pytest suite) |
