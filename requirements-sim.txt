@@ -1,0 +1,13 @@
+# Evaluation environment only (M3): IDM's laser-measles simulator and its numerical stack.
+# Install in a SEPARATE virtual environment from the web app, because laser-measles needs
+# numpy 2.x and a specific numba, while the app pins numpy 1.26. See docs/EVALUATION.md.
+#   py -3.12 -m venv .venv-sim
+#   .venv-sim\Scripts\Activate.ps1
+#   pip install -r requirements-sim.txt
+#   python -m evaluation.harness
+
+# IDM recommends laser-measles >=0.13,<1.0 as the validated version.
+laser-measles==0.13.3
+# numba 0.63+ fails to compile laser-measles 0.13 kernels (tested October 2026).
+numba==0.62.1
+pytest==9.1.1

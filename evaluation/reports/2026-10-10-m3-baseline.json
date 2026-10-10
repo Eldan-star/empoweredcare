@@ -1,0 +1,592 @@
+{
+  "name": "m3-baseline",
+  "date": "2026-10-10",
+  "synthetic_units": true,
+  "results": [
+    {
+      "scenario": {
+        "name": "gravity",
+        "mixing": "gravity",
+        "seed": 1,
+        "rate_mean": 0.12,
+        "importation_rate": 0.05,
+        "beta_scale": 1.0,
+        "years": 15,
+        "burn_in_years": 4,
+        "note": "Simulator mixing is gravity (laser defaults); our model uses its own gravity exponents"
+      },
+      "units": 400,
+      "weeks_scored": 572,
+      "outbreaks": 826,
+      "large_outbreaks": 399,
+      "detection": {
+        "action_all": {
+          "outbreaks": 826,
+          "sensitivity": 0.32929782082324455,
+          "ppv": 0.9176069831807536,
+          "episodes": 4697,
+          "false_episodes_per_unit_year": 0.08795454545454545,
+          "detected": 272,
+          "median_delay_days": 21.0,
+          "share_detected_before_onset": 0.15808823529411764
+        },
+        "action_large": {
+          "outbreaks": 399,
+          "sensitivity": 0.45864661654135336,
+          "ppv": 0.9176069831807536,
+          "episodes": 4697,
+          "false_episodes_per_unit_year": 0.08795454545454545,
+          "detected": 183,
+          "median_delay_days": 28.0,
+          "share_detected_before_onset": 0.09289617486338798
+        },
+        "alert_all": {
+          "outbreaks": 826,
+          "sensitivity": 0.7276029055690073,
+          "ppv": 0.8286469272985975,
+          "episodes": 14759,
+          "false_episodes_per_unit_year": 0.5747727272727273,
+          "detected": 601,
+          "median_delay_days": 7.0,
+          "share_detected_before_onset": 0.44093178036605657
+        },
+        "alert_large": {
+          "outbreaks": 399,
+          "sensitivity": 0.7944862155388471,
+          "ppv": 0.8286469272985975,
+          "episodes": 14759,
+          "false_episodes_per_unit_year": 0.5747727272727273,
+          "detected": 317,
+          "median_delay_days": 7.0,
+          "share_detected_before_onset": 0.4069400630914827
+        }
+      },
+      "risk": {
+        "k_share": 0.1,
+        "high_burden_next_quarter": {
+          "months_scored": 129,
+          "median_k": 40.0,
+          "base_rate": 0.09999999999999999,
+          "precision_at_k": {
+            "index": 0.5040697674418604,
+            "index_3m": 0.5104651162790698,
+            "susceptible_share": 0.163953488372093,
+            "low_mcv1": 0.29437984496124026,
+            "last_12m_cases": 0.26356589147286824,
+            "random": 0.10096899224806201,
+            "oracle_true_susceptibles": 0.26686046511627903
+          },
+          "recall_at_k": {
+            "index": 0.5040697674418604,
+            "index_3m": 0.5104651162790698,
+            "susceptible_share": 0.163953488372093,
+            "low_mcv1": 0.29437984496124026,
+            "last_12m_cases": 0.26356589147286824,
+            "random": 0.10096899224806201,
+            "oracle_true_susceptibles": 0.26686046511627903
+          }
+        },
+        "ignition_next_quarter": {
+          "months_scored": 126,
+          "median_k": 4.0,
+          "base_rate": 0.16557629697956674,
+          "precision_at_k": {
+            "index": 0.18392000415809942,
+            "index_3m": 0.1864332316713269,
+            "susceptible_share": 0.16846193929527262,
+            "low_mcv1": 0.22250635167301833,
+            "last_12m_cases": 0.10953960061102917,
+            "random": 0.1771702944321992,
+            "oracle_true_susceptibles": 0.2976807804188757
+          },
+          "recall_at_k": {
+            "index": 0.10845739761982573,
+            "index_3m": 0.1094179670327761,
+            "susceptible_share": 0.11063023639096173,
+            "low_mcv1": 0.16408155296042906,
+            "last_12m_cases": 0.06182155168941989,
+            "random": 0.09618731385009825,
+            "oracle_true_susceptibles": 0.200124068343514
+          }
+        },
+        "ignitions_in_top_k_1_month_before": 0.14761904761904762,
+        "ignitions_in_top_k_3_months_before": 0.11337868480725624
+      },
+      "reconstruction": {
+        "rho_estimated_units": 400,
+        "rho_median_abs_error": 0.016099412504219854,
+        "rho_rank_correlation": 0.8877914236963983,
+        "susceptible_share_rank_correlation": 0.2608660679129245,
+        "true_reporting_rate_median": 0.11193298761382196
+      }
+    },
+    {
+      "scenario": {
+        "name": "radiation",
+        "mixing": "radiation",
+        "seed": 1,
+        "rate_mean": 0.12,
+        "importation_rate": 0.05,
+        "beta_scale": 1.0,
+        "years": 15,
+        "burn_in_years": 4,
+        "note": "Mis-specified: simulator uses radiation mixing"
+      },
+      "units": 400,
+      "weeks_scored": 572,
+      "outbreaks": 834,
+      "large_outbreaks": 424,
+      "detection": {
+        "action_all": {
+          "outbreaks": 834,
+          "sensitivity": 0.35851318944844124,
+          "ppv": 0.9239406779661017,
+          "episodes": 4720,
+          "false_episodes_per_unit_year": 0.08159090909090909,
+          "detected": 299,
+          "median_delay_days": 21.0,
+          "share_detected_before_onset": 0.2040133779264214
+        },
+        "action_large": {
+          "outbreaks": 424,
+          "sensitivity": 0.46462264150943394,
+          "ppv": 0.9239406779661017,
+          "episodes": 4720,
+          "false_episodes_per_unit_year": 0.08159090909090909,
+          "detected": 197,
+          "median_delay_days": 21.0,
+          "share_detected_before_onset": 0.18781725888324874
+        },
+        "alert_all": {
+          "outbreaks": 834,
+          "sensitivity": 0.7470023980815348,
+          "ppv": 0.8241802725678046,
+          "episodes": 14822,
+          "false_episodes_per_unit_year": 0.5922727272727273,
+          "detected": 623,
+          "median_delay_days": 7.0,
+          "share_detected_before_onset": 0.4510433386837881
+        },
+        "alert_large": {
+          "outbreaks": 424,
+          "sensitivity": 0.785377358490566,
+          "ppv": 0.8241802725678046,
+          "episodes": 14822,
+          "false_episodes_per_unit_year": 0.5922727272727273,
+          "detected": 333,
+          "median_delay_days": 7.0,
+          "share_detected_before_onset": 0.44144144144144143
+        }
+      },
+      "risk": {
+        "k_share": 0.1,
+        "high_burden_next_quarter": {
+          "months_scored": 129,
+          "median_k": 40.0,
+          "base_rate": 0.09999999999999999,
+          "precision_at_k": {
+            "index": 0.5193798449612403,
+            "index_3m": 0.5267441860465115,
+            "susceptible_share": 0.1875968992248062,
+            "low_mcv1": 0.2808139534883721,
+            "last_12m_cases": 0.2757751937984496,
+            "random": 0.10096899224806202,
+            "oracle_true_susceptibles": 0.2556201550387597
+          },
+          "recall_at_k": {
+            "index": 0.5193798449612403,
+            "index_3m": 0.5267441860465115,
+            "susceptible_share": 0.1875968992248062,
+            "low_mcv1": 0.2808139534883721,
+            "last_12m_cases": 0.2757751937984496,
+            "random": 0.10096899224806202,
+            "oracle_true_susceptibles": 0.2556201550387597
+          }
+        },
+        "ignition_next_quarter": {
+          "months_scored": 118,
+          "median_k": 4.5,
+          "base_rate": 0.16650645271313666,
+          "precision_at_k": {
+            "index": 0.21073187640984253,
+            "index_3m": 0.21471306471306473,
+            "susceptible_share": 0.17591923142770596,
+            "low_mcv1": 0.21511720388839034,
+            "last_12m_cases": 0.07660653847094526,
+            "random": 0.1470498428125547,
+            "oracle_true_susceptibles": 0.3118284493284493
+          },
+          "recall_at_k": {
+            "index": 0.14452642977737032,
+            "index_3m": 0.14683767785133026,
+            "susceptible_share": 0.10488121613160398,
+            "low_mcv1": 0.12688132773120941,
+            "last_12m_cases": 0.038382470309515256,
+            "random": 0.08514290459225103,
+            "oracle_true_susceptibles": 0.21249482303713774
+          }
+        },
+        "ignitions_in_top_k_1_month_before": 0.14285714285714285,
+        "ignitions_in_top_k_3_months_before": 0.11883408071748879
+      },
+      "reconstruction": {
+        "rho_estimated_units": 400,
+        "rho_median_abs_error": 0.014398112961623119,
+        "rho_rank_correlation": 0.8869699810623813,
+        "susceptible_share_rank_correlation": 0.2672146700916882,
+        "true_reporting_rate_median": 0.11193298761382196
+      }
+    },
+    {
+      "scenario": {
+        "name": "stouffer",
+        "mixing": "stouffer",
+        "seed": 1,
+        "rate_mean": 0.12,
+        "importation_rate": 0.05,
+        "beta_scale": 1.0,
+        "years": 15,
+        "burn_in_years": 4,
+        "note": "Mis-specified: simulator uses intervening-opportunities mixing"
+      },
+      "units": 400,
+      "weeks_scored": 572,
+      "outbreaks": 728,
+      "large_outbreaks": 375,
+      "detection": {
+        "action_all": {
+          "outbreaks": 728,
+          "sensitivity": 0.3585164835164835,
+          "ppv": 0.9163229228049499,
+          "episodes": 5091,
+          "false_episodes_per_unit_year": 0.09681818181818182,
+          "detected": 261,
+          "median_delay_days": 21.0,
+          "share_detected_before_onset": 0.2413793103448276
+        },
+        "action_large": {
+          "outbreaks": 375,
+          "sensitivity": 0.44533333333333336,
+          "ppv": 0.9163229228049499,
+          "episodes": 5091,
+          "false_episodes_per_unit_year": 0.09681818181818182,
+          "detected": 167,
+          "median_delay_days": 28.0,
+          "share_detected_before_onset": 0.18562874251497005
+        },
+        "alert_all": {
+          "outbreaks": 728,
+          "sensitivity": 0.7651098901098901,
+          "ppv": 0.8393491315296701,
+          "episodes": 15487,
+          "false_episodes_per_unit_year": 0.5654545454545454,
+          "detected": 557,
+          "median_delay_days": 7.0,
+          "share_detected_before_onset": 0.4614003590664273
+        },
+        "alert_large": {
+          "outbreaks": 375,
+          "sensitivity": 0.792,
+          "ppv": 0.8393491315296701,
+          "episodes": 15487,
+          "false_episodes_per_unit_year": 0.5654545454545454,
+          "detected": 297,
+          "median_delay_days": 7.0,
+          "share_detected_before_onset": 0.4276094276094276
+        }
+      },
+      "risk": {
+        "k_share": 0.1,
+        "high_burden_next_quarter": {
+          "months_scored": 129,
+          "median_k": 40.0,
+          "base_rate": 0.09999999999999999,
+          "precision_at_k": {
+            "index": 0.5063953488372093,
+            "index_3m": 0.513953488372093,
+            "susceptible_share": 0.1868217054263566,
+            "low_mcv1": 0.3063953488372093,
+            "last_12m_cases": 0.27403100775193795,
+            "random": 0.09786821705426356,
+            "oracle_true_susceptibles": 0.2750000000000001
+          },
+          "recall_at_k": {
+            "index": 0.5063953488372093,
+            "index_3m": 0.513953488372093,
+            "susceptible_share": 0.1868217054263566,
+            "low_mcv1": 0.3063953488372093,
+            "last_12m_cases": 0.27403100775193795,
+            "random": 0.09786821705426356,
+            "oracle_true_susceptibles": 0.2750000000000001
+          }
+        },
+        "ignition_next_quarter": {
+          "months_scored": 96,
+          "median_k": 3.0,
+          "base_rate": 0.2084961020632703,
+          "precision_at_k": {
+            "index": 0.20335084475709475,
+            "index_3m": 0.20005223364598365,
+            "susceptible_share": 0.14810793951418952,
+            "low_mcv1": 0.16530784030784032,
+            "last_12m_cases": 0.1138434193121693,
+            "random": 0.20604369588744587,
+            "oracle_true_susceptibles": 0.2633906024531025
+          },
+          "recall_at_k": {
+            "index": 0.11066561374159546,
+            "index_3m": 0.11167176904462577,
+            "susceptible_share": 0.08609947389848449,
+            "low_mcv1": 0.09768825634834555,
+            "last_12m_cases": 0.049488568917472525,
+            "random": 0.10358488997545774,
+            "oracle_true_susceptibles": 0.14122240461729327
+          }
+        },
+        "ignitions_in_top_k_1_month_before": 0.1282051282051282,
+        "ignitions_in_top_k_3_months_before": 0.10714285714285714
+      },
+      "reconstruction": {
+        "rho_estimated_units": 400,
+        "rho_median_abs_error": 0.014873845132381477,
+        "rho_rank_correlation": 0.8864579153619715,
+        "susceptible_share_rank_correlation": 0.2032724579528621,
+        "true_reporting_rate_median": 0.11193298761382196
+      }
+    },
+    {
+      "scenario": {
+        "name": "low-reporting",
+        "mixing": "gravity",
+        "seed": 2,
+        "rate_mean": 0.05,
+        "importation_rate": 0.05,
+        "beta_scale": 1.0,
+        "years": 15,
+        "burn_in_years": 4,
+        "note": "Only ~5% of infections reported"
+      },
+      "units": 400,
+      "weeks_scored": 572,
+      "outbreaks": 788,
+      "large_outbreaks": 377,
+      "detection": {
+        "action_all": {
+          "outbreaks": 788,
+          "sensitivity": 0.09644670050761421,
+          "ppv": 0.9684490202590501,
+          "episodes": 3011,
+          "false_episodes_per_unit_year": 0.02159090909090909,
+          "detected": 76,
+          "median_delay_days": 28.0,
+          "share_detected_before_onset": 0.17105263157894737
+        },
+        "action_large": {
+          "outbreaks": 377,
+          "sensitivity": 0.11936339522546419,
+          "ppv": 0.9684490202590501,
+          "episodes": 3011,
+          "false_episodes_per_unit_year": 0.02159090909090909,
+          "detected": 45,
+          "median_delay_days": 35.0,
+          "share_detected_before_onset": 0.15555555555555556
+        },
+        "alert_all": {
+          "outbreaks": 788,
+          "sensitivity": 0.4352791878172589,
+          "ppv": 0.884020119945831,
+          "episodes": 10338,
+          "false_episodes_per_unit_year": 0.2725,
+          "detected": 343,
+          "median_delay_days": 14.0,
+          "share_detected_before_onset": 0.36443148688046645
+        },
+        "alert_large": {
+          "outbreaks": 377,
+          "sensitivity": 0.47480106100795755,
+          "ppv": 0.884020119945831,
+          "episodes": 10338,
+          "false_episodes_per_unit_year": 0.2725,
+          "detected": 179,
+          "median_delay_days": 14.0,
+          "share_detected_before_onset": 0.33519553072625696
+        }
+      },
+      "risk": {
+        "k_share": 0.1,
+        "high_burden_next_quarter": {
+          "months_scored": 129,
+          "median_k": 40.0,
+          "base_rate": 0.09999999999999999,
+          "precision_at_k": {
+            "index": 0.4393410852713178,
+            "index_3m": 0.4501937984496124,
+            "susceptible_share": 0.19767441860465115,
+            "low_mcv1": 0.30096899224806206,
+            "last_12m_cases": 0.2441860465116279,
+            "random": 0.10232558139534884,
+            "oracle_true_susceptibles": 0.25852713178294573
+          },
+          "recall_at_k": {
+            "index": 0.4393410852713178,
+            "index_3m": 0.4501937984496124,
+            "susceptible_share": 0.19767441860465115,
+            "low_mcv1": 0.30096899224806206,
+            "last_12m_cases": 0.2441860465116279,
+            "random": 0.10232558139534884,
+            "oracle_true_susceptibles": 0.25852713178294573
+          }
+        },
+        "ignition_next_quarter": {
+          "months_scored": 126,
+          "median_k": 13.0,
+          "base_rate": 0.09186090829216599,
+          "precision_at_k": {
+            "index": 0.059405142148926164,
+            "index_3m": 0.059405142148926164,
+            "susceptible_share": 0.044371808629559785,
+            "low_mcv1": 0.08767251023563159,
+            "last_12m_cases": 0.06278242384156145,
+            "random": 0.09419838846786972,
+            "oracle_true_susceptibles": 0.14129955337818345
+          },
+          "recall_at_k": {
+            "index": 0.06659674036823379,
+            "index_3m": 0.06659674036823379,
+            "susceptible_share": 0.05317491884868206,
+            "low_mcv1": 0.07612788257343232,
+            "last_12m_cases": 0.07256863353003058,
+            "random": 0.10256593351457312,
+            "oracle_true_susceptibles": 0.1731680937772478
+          }
+        },
+        "ignitions_in_top_k_1_month_before": 0.0684326710816777,
+        "ignitions_in_top_k_3_months_before": 0.06799336650082918
+      },
+      "reconstruction": {
+        "rho_estimated_units": 392,
+        "rho_median_abs_error": 0.007282017203772485,
+        "rho_rank_correlation": 0.9532930908481879,
+        "susceptible_share_rank_correlation": 0.11534397089981807,
+        "true_reporting_rate_median": 0.03152570668441923
+      }
+    },
+    {
+      "scenario": {
+        "name": "episodic",
+        "mixing": "gravity",
+        "seed": 3,
+        "rate_mean": 0.12,
+        "importation_rate": 0.05,
+        "beta_scale": 0.8,
+        "years": 15,
+        "burn_in_years": 4,
+        "note": "Lower transmission: more woredas between outbreaks, closer to Ethiopia's reported pattern"
+      },
+      "units": 400,
+      "weeks_scored": 572,
+      "outbreaks": 798,
+      "large_outbreaks": 365,
+      "detection": {
+        "action_all": {
+          "outbreaks": 798,
+          "sensitivity": 0.3383458646616541,
+          "ppv": 0.9064290260980268,
+          "episodes": 4713,
+          "false_episodes_per_unit_year": 0.10022727272727272,
+          "detected": 270,
+          "median_delay_days": 21.0,
+          "share_detected_before_onset": 0.27037037037037037
+        },
+        "action_large": {
+          "outbreaks": 365,
+          "sensitivity": 0.4520547945205479,
+          "ppv": 0.9064290260980268,
+          "episodes": 4713,
+          "false_episodes_per_unit_year": 0.10022727272727272,
+          "detected": 165,
+          "median_delay_days": 28.0,
+          "share_detected_before_onset": 0.18181818181818182
+        },
+        "alert_all": {
+          "outbreaks": 798,
+          "sensitivity": 0.7355889724310777,
+          "ppv": 0.8014761674829275,
+          "episodes": 14497,
+          "false_episodes_per_unit_year": 0.6540909090909091,
+          "detected": 587,
+          "median_delay_days": 7.0,
+          "share_detected_before_onset": 0.4855195911413969
+        },
+        "alert_large": {
+          "outbreaks": 365,
+          "sensitivity": 0.7671232876712328,
+          "ppv": 0.8014761674829275,
+          "episodes": 14497,
+          "false_episodes_per_unit_year": 0.6540909090909091,
+          "detected": 280,
+          "median_delay_days": 7.0,
+          "share_detected_before_onset": 0.44285714285714284
+        }
+      },
+      "risk": {
+        "k_share": 0.1,
+        "high_burden_next_quarter": {
+          "months_scored": 129,
+          "median_k": 40.0,
+          "base_rate": 0.09999999999999999,
+          "precision_at_k": {
+            "index": 0.5343023255813953,
+            "index_3m": 0.5383720930232557,
+            "susceptible_share": 0.18895348837209303,
+            "low_mcv1": 0.29379844961240315,
+            "last_12m_cases": 0.2874031007751938,
+            "random": 0.09554263565891473,
+            "oracle_true_susceptibles": 0.2660852713178295
+          },
+          "recall_at_k": {
+            "index": 0.5343023255813953,
+            "index_3m": 0.5383720930232557,
+            "susceptible_share": 0.18895348837209303,
+            "low_mcv1": 0.29379844961240315,
+            "last_12m_cases": 0.2874031007751938,
+            "random": 0.09554263565891473,
+            "oracle_true_susceptibles": 0.2660852713178295
+          }
+        },
+        "ignition_next_quarter": {
+          "months_scored": 124,
+          "median_k": 5.0,
+          "base_rate": 0.14781290190925064,
+          "precision_at_k": {
+            "index": 0.15891187665381215,
+            "index_3m": 0.15931510246026376,
+            "susceptible_share": 0.14848142448948903,
+            "low_mcv1": 0.18197736403381565,
+            "last_12m_cases": 0.08507084313535926,
+            "random": 0.14654628525596264,
+            "oracle_true_susceptibles": 0.22930080672016157
+          },
+          "recall_at_k": {
+            "index": 0.0969189466364389,
+            "index_3m": 0.09677493741984904,
+            "susceptible_share": 0.08941357386884452,
+            "low_mcv1": 0.1256011089665464,
+            "last_12m_cases": 0.05669023967504692,
+            "random": 0.0837696230636658,
+            "oracle_true_susceptibles": 0.15256486745663317
+          }
+        },
+        "ignitions_in_top_k_1_month_before": 0.12315270935960591,
+        "ignitions_in_top_k_3_months_before": 0.08928571428571429
+      },
+      "reconstruction": {
+        "rho_estimated_units": 400,
+        "rho_median_abs_error": 0.021393477751310924,
+        "rho_rank_correlation": 0.7686338664616651,
+        "susceptible_share_rank_correlation": 0.2304138258870602,
+        "true_reporting_rate_median": 0.1108941446452986
+      }
+    }
+  ]
+}
