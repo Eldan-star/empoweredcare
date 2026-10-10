@@ -7,6 +7,15 @@ current codebase does, and what Phase 1 will build. It records every model decis
 with the evidence behind it, so that anyone (engineer, epidemiologist, funder) can check
 the reasoning.
 
+**For reviewers:** `METHODOLOGY.md` sets out every model and AI use in one place, with its
+assumptions, evidence, limitations, validation plan and open questions. It is written for
+an epidemiologist or disease modeller to check.
+
+**Design principle: multi-disease.** Measles is the first disease, not the only one. The
+core is shared by every disease: geography, ingestion, signals, fusion, explanation and
+evaluation. Each disease adds its own module of case definitions, thresholds, detection
+methods and risk drivers (§13).
+
 ---
 
 ## 1. What we are building
@@ -203,14 +212,43 @@ Spatial coupling follows the gravity form established for measles metapopulation
 - `a`, `c`: gravity exponents, initialised from the literature, fitted to Ethiopian data
   when history is available.
 - Cross-border pressure (Somalia, Kenya, South Sudan, Sudan) enters as additional source
-  terms when data exist; displacement (IOM DTM) and conflict (ACLED) are contextual
-  modifiers, not part of the formula.
+  terms when data exist. Conflict and displacement enter through the pathways in §5.6,
+  not as a multiplier.
 
 ### 5.5 Output
 - `index_i` = λ_i rescaled to a 0–100 rank within the country for the month, plus the top
   contributing factors (susceptible share, nearby incidence, surveillance silence).
 - **It is a ranked index, not a probability.** It will not be presented as a probability
   until it has been backtested against historical outbreaks.
+- **Horizons:**
+  - **1 month:** current λ.
+  - **3 months:** S projected forward with expected births and current coverage. This
+    horizon is driven mostly by susceptibility, and is labelled that way.
+- **The index must beat simple baselines before it is shown as a risk ranking.** The
+  baselines are: rank by MCV1 coverage alone, rank by last year's cases, and rank at
+  random (§10).
+
+### 5.6 Conflict and displacement: three pathways, no hidden multiplier (agreed October 2026)
+No published estimate supports a single "conflict multiplier", so the model uses none.
+Conflict acts through three named pathways:
+
+1. **Vaccination disruption.** Conflict reduces effective routine and campaign coverage
+   in affected units and months. This feeds `P_eff` and `SIA_t`, so the susceptible pool
+   grows with a lag.
+2. **Surveillance quality.** Falls in reporting completeness, or long zero runs during
+   conflict, mark a unit **surveillance quality: low**. The unit is shown as "data
+   unreliable", never as "all clear", and ρ is not estimated across the break.
+3. **Threat / priority factor.** Active conflict and large displacement are shown as a
+   named factor, like the threat category of the WHO/CDC measles programmatic risk tool.
+   This factor raises priority within a fusion tier (§8). It never changes the index
+   number.
+
+**Data:**
+- IOM DTM first.
+- UCDP and ACLED for triangulation. ACLED is used only internally, in aggregated form,
+  after its licence terms are confirmed.
+
+Evidence and references are in `METHODOLOGY.md` §4.5.
 
 ---
 
@@ -249,10 +287,38 @@ already large, so Phase 1 does not scrape it.
 
 Phase 1 sources:
 1. **Structured intake API** (`POST /intake/trigger`) using the trigger schema in §3.2.
-   It is channel-agnostic: SMS, Telegram or eCHIS adapters will be chosen after the EPHI
-   interviews (`INTERVIEW_GUIDE.md`).
-2. **EPHI weekly bulletins** (printed PDFs) parsed into tables.
-3. **ReliefWeb API** for Ethiopia and its neighbours (context signals).
+   - It is channel-agnostic. SMS, Telegram or eCHIS adapters will be chosen after the
+     EPHI interviews (`INTERVIEW_GUIDE.md`).
+   - **Trigger types are configuration, not code.** They come from the EPHI community
+     event-based surveillance trigger list, to be checked against the manuals in
+     `docs/references/ephi/`.
+   - The list includes "unusual animal deaths", with a `species` field (One Health
+     groundwork, §13).
+2. **EPHI weekly bulletins** (printed PDFs) are parsed into tables.
+   - They come in by manual upload.
+   - Past bulletins also form a historical test set (§10).
+   - Bulletins are irregular and late, so they are a lagging source, not a live feed.
+3. **ReliefWeb API, WHO AFRO bulletins, WHO Disease Outbreak News** for Ethiopia and its
+   neighbours. These give context and cross-border signals, and produce at most YELLOW.
+
+Community triggers have low positive predictive value: about 6% in an evaluation in Doolo
+zone (`METHODOLOGY.md` §4.9). Verification is therefore part of the design, not an
+extra.
+
+### 7.1 Data source registry
+Each source is recorded with its licence, update frequency, resolution, owner, access
+status and the diseases it serves. The registry lives in `METHODOLOGY.md` §9 and becomes
+a database table when the first context feed is added (M4).
+
+| Category | Sources |
+|---|---|
+| Routine surveillance | PHEM weekly / EPI monthly via DHIS2 (pull blocked until EPHI written approval) |
+| Community triggers | CEBS intake |
+| Open-source intelligence | ReliefWeb, WHO AFRO, WHO DON; EIOS via partnership |
+| Population / immunity | OCHA COD-PS, WorldPop, WUENIC, DHS, IHME |
+| Displacement / conflict | IOM DTM, UCDP, ACLED (after licence check) |
+| Climate (disease #2 onward) | CHIRPS, ERA5, MODIS; reuse EPIDEMIA and DHIS2 CHAP |
+| One Health | WOAH WAHIS, FAO EMPRES-i |
 
 Pipeline: extract (existing `ExtractionAgent`) → hierarchical geocode (§4) → cluster
 (same disease, same unit, 14-day window) → `signals` with status *pending* → human
@@ -289,6 +355,25 @@ plus a verified signal raises YELLOW to ORANGE. Modifiers never lower a tier.
 - All LLM calls go through one `LLMProvider` interface (`services/llm.py`) with enforced
   JSON output, so the provider can change without touching business logic.
 
+### 9.1 AI beyond language
+AI is used as a capability multiplier, not only for reading text. The rule is:
+
+> **AI proposes, compiles and explains. Statistics decide. People verify.**
+
+Planned uses include:
+- a sitrep compiler, in which numbers are inserted by code;
+- an OSINT monitor that also removes duplicate signals;
+- a bulletin digitiser that checks its tables against the printed totals;
+- a guideline assistant over the EPHI manuals, which must cite its sources;
+- an analyst copilot that turns questions into read-only SQL and charts;
+- data-quality triage;
+- alias and boundary curation, with every change approved by a person;
+- a calibration and sensitivity assistant;
+- once laser-measles is calibrated, a scenario agent that runs what-if simulations.
+
+Each use is treated as a hypothesis and measured locally. The full table, with
+guardrails and metrics, is in `METHODOLOGY.md` §10.
+
 ---
 
 ## 10. Evaluation
@@ -304,9 +389,24 @@ correctly).
   outbreak onsets.
 - **Detection metrics:** sensitivity, positive predictive value, false alerts per
   unit-year, days from onset to detection (the "detect" part of the 7-1-7 target [11]).
-- **Risk-index metrics:** precision@k (do the top-k zones contain next quarter's
-  outbreaks?), lead time.
+- **Risk-index metrics:**
+  - precision@k and recall@k: do the top-k zones contain next quarter's outbreaks?
+  - **lead time:** the weeks between a zone entering the top-k and its outbreak;
+  - comparison with the baselines in §5.5.
+- **Circularity guard.** The simulator is also run with mixing and parameters that differ
+  from the risk model's own, so that good scores are not just two models agreeing.
+- **Real-history checks:** past EPHI bulletins and ReliefWeb / WHO AFRO outbreak reports
+  now; DHIS2 history once approved.
 - Reports are written to `evaluation/reports/`.
+
+**Why laser-measles is the test bed and not the live engine.**
+- Calibrating it needs Ethiopian case history.
+- Weekly users need factors they can see.
+- Using one simulator both to generate the test data and to forecast would make the test
+  circular.
+
+Once calibrated, it becomes a scenario engine and a challenger forecast (`METHODOLOGY.md`
+§6).
 
 ---
 
@@ -315,10 +415,13 @@ correctly).
 | Item | Why deferred | Trigger to start |
 |---|---|---|
 | Alert-triage classifier (logistic regression / XGBoost) | Needs labelled verdicts | A few hundred officer verdicts |
-| Fitted gravity parameters; endemic-epidemic (hhh4-style) model; XGBoost risk | Needs real multi-year history | EPHI DHIS2 access |
+| Fitted gravity parameters; endemic-epidemic (hhh4-style) model; Bayesian spatio-temporal model (PyMC/NumPyro in place of INLA); fitted TSIR; XGBoost risk | Needs real multi-year history | EPHI DHIS2 access |
+| Nowcasting of reporting delays | Needs reporting-date history | EPHI DHIS2 access |
+| Calibrated laser-measles scenarios | Needs calibration to Ethiopian history | EPHI DHIS2 access |
+| One Health analytics (WAHIS, EMPRES-i, scan statistics) | Measles pilot first; the groundwork (registry entries, animal-death trigger) is done now | After the measles pilot |
 | Photo OCR of paper forms (see 11.1) | Error-prone on handwriting; the old cloud pipeline was removed | Accuracy measured on real forms |
 | SMS / Telegram / eCHIS channels | Governance and channel choice | EPHI interviews and agreement |
-| Disease #2 (cholera/AWD, zoonoses) and One Health data | Measles pilot first | Pilot results |
+| Disease #2 (cholera/AWD, zoonoses) | Measles pilot first | Pilot results |
 | Feeds out to CHAP and WHO PDX | Needs a stable engine | After Phase 1 |
 
 ### 11.1 Sovereign, on-premises document processing (decided October 2026)
@@ -380,7 +483,25 @@ of forms is available, and the GPU hardware is identified.
 
 ---
 
-## 13. Glossary (plain language)
+## 13. Multi-disease design and One Health (agreed October 2026)
+
+| Archetype | Examples | Detection | Risk drivers |
+|---|---|---|---|
+| Vaccine-preventable | Measles, diphtheria, pertussis | Thresholds + EARS/CUSUM | Susceptible build-up, importation |
+| Climate-sensitive | Malaria, dengue | Seasonal baselines (reuse EPIDEMIA, DHIS2 CHAP) | Rainfall, temperature, vegetation |
+| Water-borne | Cholera / AWD | Thresholds | Water, displacement, flooding, cross-border |
+| Zoonotic / One Health | Anthrax, rabies, Rift Valley fever | Scan statistics; animal-event triggers | Animal outbreaks, livestock movement, rainfall |
+
+- Thresholds and case definitions for each disease come from the EPHI manuals. The public
+  PDFs go in `docs/references/ephi/`.
+- **One Health:**
+  - **Now:** registry entries for WOAH WAHIS and FAO EMPRES-i, and an animal-death trigger
+    with a species field.
+  - **After measles:** analytics.
+
+---
+
+## 14. Glossary (plain language)
 - **Baseline:** the count that is normal for a place and time; alarms compare against it.
 - **Threshold rule:** a fixed count that defines an outbreak (e.g. ≥3 confirmed cases a month).
 - **Sensitivity:** of the real outbreaks, the share the system caught.
