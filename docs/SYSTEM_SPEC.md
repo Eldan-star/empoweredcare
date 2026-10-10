@@ -75,8 +75,9 @@ Verified by reading the code; file references are to the repository at this revi
   `data/patient_records.json` are committed; CORS allows `*`.
 - The landing page shows invented metrics (99.1% accuracy, 48,201 records, SMS
   escalation) and the pipeline animation runs on timers, not backend progress.
-- `AI_ARCHITECTURE_WALKTHROUGH.md` describes an SMS gateway, offline sync agent and
-  EPHI-guideline RAG that do not exist.
+- The earlier design documents described an SMS gateway, offline sync agent and
+  EPHI-guideline RAG that did not exist. They are now in `docs/archive/`, and their ideas
+  are reviewed in §11.2.
 
 ---
 
@@ -469,6 +470,52 @@ images and PDF pages still work through Gemini vision in `/outbreak/upload`.
 
 **Trigger to start:** EPHI confirms its data-residency requirement, a labelled sample
 of forms is available, and the GPU hardware is identified.
+
+### 11.2 Ideas carried over from the earlier design documents (reviewed October 2026)
+
+The hackathon-era documents (now in `docs/archive/`) described several features that were
+never built. Each idea was reviewed on its merits. Ideas worth having are **kept** or
+**reshaped** and given a place in the plan. Ideas the evidence or the new design makes
+unnecessary are **retired**, with the reason.
+
+**Field reporting and connectivity**
+
+| Idea | Decision | Future design | When |
+|---|---|---|---|
+| **SMS gateway for health extension workers (HEWs)** | **Keep** | <ul><li>An SMS adapter on `POST /intake/trigger`, through a short code with Ethio Telecom or an aggregator.</li><li>Two message forms:<ul><li>a short coded syntax, for example `MSL 4 0 KEBELE-NAME` (trigger, cases, deaths, place), parsed by rules with no AI;</li><li>free text, parsed by the extraction agent and confirmed back to the sender by SMS ("Received: 4 suspected measles, Dubluk. Reply 1 to confirm").</li></ul></li><li>USSD menus are an alternative for structured entry.</li><li>Works on any phone without mobile data.</li></ul> | After the EPHI interviews settle the channel (SMS vs Telegram vs eCHIS, §7). The intake API it plugs into is M4 |
+| **Two-way SMS to officers: alert notices and a daily or weekly digest** | **Keep** | <ul><li>A RED or ORANGE alert sends an SMS to the responsible woreda and zone officers, who acknowledge it by reply.</li><li>A short digest of top alerts per area is sent on a schedule.</li><li>Acknowledgement time feeds the 7-1-7 "notify" metric.</li></ul> | With M5 alerts, through the same gateway |
+| **Offline working** | **Reshape** | <ul><li>The data-entry pages become an installable web app that saves reports on the device and sends them when a connection returns.</li><li>The SMS path already works without data.</li><li>This replaces the old idea of a sync agent on a woreda laptop: a second server to maintain at every woreda is not realistic.</li></ul> | After M5, once the field workflow is agreed |
+| **"Safe capture": never lose input when AI is down** | **Keep. Partly built** | <ul><li>Raw input is stored first, and AI processing follows.</li><li>**Built:** analyses that fail partway are flagged and re-run by `scripts/reprocess_failed.py`.</li><li>**Gap:** when AI quota runs out, or extraction fails completely, the report is not stored and must be resubmitted.</li><li>**To do:** store the raw input first, then queue it for automatic retry.</li></ul> | M4 |
+
+**AI agents**
+
+| Idea | Decision | Future design | When |
+|---|---|---|---|
+| **Multi-agent orchestration (SuperAgent)** | **Reshape** | <ul><li>Agents stay, with a different job: **agents that use tools**, not agents that give opinions.</li><li>An orchestrator calls deterministic tools (database queries, the geocoder, detection rules, the risk model, the simulator) and composes the result.</li><li>This is how the sitrep compiler, OSINT monitor, analyst copilot and scenario agent work (`METHODOLOGY.md` §10).</li></ul> | M4–M5, then ongoing |
+| **Four-perspective risk vote and confidence averaging** | **Retire** as the risk engine | <ul><li>It averages a language model's opinion of its own risk call, and that self-reported confidence is not calibrated.</li><li>A single HIGH vote is diluted by the others.</li><li>Replaced by the statistical risk index (§5) and the alert tiers (§8).</li><li>The code stays until M5 so the current pages keep working.</li></ul> | Removed at M5 |
+| **Generator plus checker (the useful part of "multi-agent consensus")** | **Keep, as a new pattern** | <ul><li>A second, independent check reviews every AI draft (explanation, sitrep, OSINT extraction) against the stored evidence.</li><li>It flags any claim, number or place that the evidence does not support.</li><li>Flagged drafts go to a person.</li></ul> | M5, with the sitrep compiler |
+| **Validation agent** | **Reshape** | <ul><li>Plausibility checks become rules: impossible counts, missing required fields, a date in the future, a duplicate of an existing cluster.</li><li>AI only explains a failed check.</li><li>Today it is AI-only and marks a report valid when the call fails. That default is a known flaw, to be fixed in M4.</li></ul> | M4 |
+| **Chat specialists (Location / Infection / History)** | **Reshape** | Becomes the analyst copilot: questions are answered by generated, read-only database queries and charts, with the query shown to the user. Separate "specialist" prompts add little once answers come from data | M5 |
+| **Parallel sub-agents for large batches** | **Keep, as an implementation detail** | Bounded parallel processing for bulk uploads and bulletin backfills, within the AI quota pacing that is already built | M4 |
+
+**Knowledge, trust and models**
+
+| Idea | Decision | Future design | When |
+|---|---|---|---|
+| **Retrieval over EPHI guidelines (RAG)** | **Keep** | <ul><li>A guideline assistant over the public manuals in `docs/references/ephi/`.</li><li>Every answer quotes its source passage and page.</li><li>It also drafts disease-module configurations for a person to approve.</li></ul> | M4, after the manuals are added |
+| **Source trust ranking** | **Reshape** | <ul><li>Trust is measured, not judged by AI.</li><li>Each source, and later each reporter, gets a positive predictive value: the share of its signals that officers verify.</li><li>This then informs triage priority.</li></ul> | Once a few hundred verdicts exist (with the triage model, §11) |
+| **Gold-standard dataset for local models** | **Keep** | <ul><li>Officer-verified extractions are exported (`scripts/export_corpus.py`, M4).</li><li>They become the test set, and later fine-tuning data, for an on-premises open-weight model (§11.1).</li><li>They also measure accuracy per language (Amharic, Afaan Oromo, Tigrinya).</li></ul> | M4 export; fine-tuning with §11.1 |
+| **Suspected / probable / confirmed classification** | **Keep. Built** | Already a field on every signal. Align the definitions with the EPHI manuals | M4 |
+| **Full reasoning audit trail per record** | **Keep. Built** | The record detail page. Extend it to show geocode candidates and rule outcomes | M5 |
+
+**Retired**
+
+| Idea | Decision | Reason |
+|---|---|---|
+| **Alert agent writing public health messages** ("boil water…") | **Reshape** | <ul><li>Public messaging belongs to EPHI's risk communication team.</li><li>Drafts are for officers only, clearly labelled as drafts.</li><li>Nothing goes to the public from this system.</li></ul> |
+| **Web research by scraping Google and Bing** | **Retire** | <ul><li>The results are unreliable and against the search engines' terms.</li><li>Replaced by the data source registry (§7.1): ReliefWeb, IOM DTM, UCDP/ACLED and WHO AFRO through their published access routes.</li><li>Targeted fetching of a known official page is allowed where no API exists.</li></ul> |
+| **YOLO layout detection and PaddleOCR** | **Retire** | Removed in M2. Superseded by the open-weight vision model route (§11.1) |
+| **"Gemini 1.5 Flash for Amharic and a 1M-token context" rationale** | **Retire** | <ul><li>That model is retired.</li><li>The claims were not measured.</li><li>Model choice is now a configuration setting (`GEMINI_MODELS` / `LLM_PROVIDER`).</li><li>Language accuracy is measured on the verified corpus.</li></ul> |
 
 ---
 

@@ -78,7 +78,7 @@ The questions we most want answered are collected in §11.
 | 4.10 | Fusion | Deterministic evidence ladder | Planned M5 | Design choice |
 | 5 | Evaluation | Synthetic data from IDM laser-measles; historical bulletins | Planned M3 | Established practice |
 | 7 | Later methods | Nowcasting; endemic–epidemic (hhh4-type); Bayesian spatio-temporal; gradient boosting; scan statistics | Deferred | Established |
-| 10 | AI uses | 14 uses with guardrails and local metrics | Mixed | Mostly hypothesis |
+| 10 | AI uses | 16 uses with guardrails and local metrics | Mixed | Mostly hypothesis |
 
 ---
 
@@ -600,6 +600,8 @@ assume it.
 | 12 | **Calibration and sensitivity assistant** | Sets up parameter sweeps, reads diagnostics, summarises which parameters drive the ranking | Results come from the runs, not from the model | Analyst review | M3+ |
 | 13 | **Alias and boundary curation** | Proposes new place-name aliases from unmatched reports, and crosswalk entries after boundary changes | Proposals go to `place_aliases.csv` only after human approval | Unmatched rate over time | M4 |
 | 14 | **Evidence watch** | Monitors new literature and guidelines on methods in this document and flags what may need updating | Human review; this document is the record | Items flagged / adopted | Later |
+| 15 | **Evidence checker** | Checks every AI draft (explanation, sitrep, OSINT extraction) against the stored evidence and flags claims, numbers or places the evidence doesn't support | Runs independently of the drafting call; flagged drafts go to a person | Share of unsupported claims caught (seeded test drafts) | M5 |
+| 16 | **SMS intake for health extension workers** | Parses free-text SMS reports and confirms the reading back to the sender ("Received: 4 suspected measles, Dubluk. Reply 1 to confirm") | Coded SMS messages are parsed by rules, not AI; the sender confirms every reading; low-confidence messages go to a person | Confirmation rate; field accuracy by language | After the channel decision (SYSTEM_SPEC §11.2) |
 
 Also planned:
 - multilingual intake (Amharic, Afaan Oromo, Tigrinya), including voice, once the
