@@ -436,6 +436,47 @@ correctly).
   - Ignition remains unsolved.
   - Details are in `EVALUATION.md`.
 
+### 10.1 Live performance monitoring (decided 11 October 2026; built in M5)
+
+**Deployment decision:**
+- The **fitted risk index** is the live "heaviest next quarter" ranking from the start.
+- The **hybrid** runs alongside it in shadow mode (computed and scored, not shown as the
+  answer) once 2 or more years of weekly counts exist.
+- It replaces the index only by the switching rules below.
+
+**What the system records:**
+- **Frozen forecast log.** On the 1st of each month, every method's ranking is saved as
+  issued. That covers the index, the hybrid in shadow, and the comparators: recent cases
+  (persistence), lowest coverage, and random. Saved forecasts are never overwritten,
+  unlike `risk_scores`, which is recalculated. Format: Hubverse-style.
+- **Monthly scoring.** Once a quarter's counts have settled (about 4 months after
+  issue), each saved ranking is scored:
+  - precision@10% and the near-miss share (top 20%);
+  - against reported cases, by region and nationally.
+  - Units that were silent in the scored quarter are excluded and counted separately.
+- **Alert verdicts.** Each alert receives the epidemiologist's verdict (outbreak / not an
+  outbreak). With the register of declared outbreaks, this gives, per method (alert and
+  action thresholds, EWMA, CUSUM, cluster scan):
+  - sensitivity and PPV;
+  - lead time before the action threshold or the declaration;
+  - the 7-1-7 "detect" rate;
+  - whether higher-priority alerts are confirmed more often.
+
+  The add-ons are judged on that last point, because ordering alerts is their job.
+- **Scorecard page.** Rolling 4-quarter results per method and region.
+
+**Switching rules (proposed; agreed before any real-data result is seen):**
+1. **The hybrid replaces the index** if it beats it by at least 5 points of
+   precision@10% over 4 consecutive scored quarters, and does not lose in more than one
+   region.
+2. **Methods that fail the persistence comparator are reviewed.** Any method that scores
+   below persistence for 2 consecutive quarters is investigated and may be withdrawn from
+   display.
+3. **Weak-reporting regions keep the index.** A region with reporting completeness below
+   80% keeps the index whatever the national result.
+4. **Add-ons are judged on the priority order.** An add-on whose flagged alerts are not
+   confirmed more often than unflagged ones over 4 quarters stops adding priority points.
+
 **Why laser-measles is the test bed and not the live engine.**
 - Calibrating it needs Ethiopian case history.
 - Weekly users need factors they can see.

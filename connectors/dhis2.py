@@ -92,6 +92,12 @@ class DHIS2Client:
         self.http = httpx.Client(base_url=self.url + "/api", headers=headers, auth=auth,
                                  timeout=timeout, transport=transport)
 
+    @property
+    def source(self) -> str:
+        """Source label for rows from this server. Demo data is labelled "dhis2-demo", which
+        the database guard (db/guard.py) refuses in the real database."""
+        return "dhis2-demo" if self.is_demo else "dhis2"
+
     def _get(self, path: str, params: dict = None) -> dict:
         try:
             r = self.http.get(path, params=params)

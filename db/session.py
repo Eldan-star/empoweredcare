@@ -7,6 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from config import DATABASE_URL
+from db import guard
 
 
 def make_engine(url: str = DATABASE_URL):
@@ -16,6 +17,7 @@ def make_engine(url: str = DATABASE_URL):
 
 engine = make_engine()
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
+guard.install(SessionLocal)  # no test, simulated or demo data in this database
 
 
 @contextmanager

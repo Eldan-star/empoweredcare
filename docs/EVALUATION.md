@@ -84,7 +84,10 @@ real data and a stronger estimation method. It is not a tuning issue.
 **Nowcasting:** about +1 point here. Its value grows when delays are longer than in this
 simulation; with real snapshot data it will learn the real delays.
 
-**Recommendation:**
+**Decision (11 October 2026):** the fitted index is live. The hybrid runs in shadow on real
+data and replaces it only by the switching rules in SYSTEM_SPEC §10.1.
+
+**Recommendation as first written:**
 1. **Use the hybrid model for "where measles will be heaviest next quarter"** once there
    are at least 2–3 years of weekly counts to train on.
 2. **Use the fitted risk index** before that, and wherever reporting is very poor.

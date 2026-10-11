@@ -33,7 +33,8 @@ Read it first._
 | Docs clean-up; prototype docs archived | Done (`docs/archive/`) |
 | EPHI manual review | Done (`EPHI_ALIGNMENT.md`) |
 | M3 analytics | Done on `m2-data-foundation`; verified by the owner on Windows (78 tests) |
-| Improvements round | Done (commits `96b5aad`..`1d564df`): 88 tests pass; the owner has **not yet tested it** |
+| Improvements round | Done (commits `96b5aad`..`1d564df`); verified by the owner on Windows (88 passed, 11 skipped, no warnings) |
+| Test-data guard | Done: `db/guard.py` refuses test, simulated or demo `source` labels in the real database (93 tests) |
 | M4 (signals intake, review page, CEBS indicators) | Not started |
 | M5 (alerts, map, sitreps, frontend colour rework) | Not started |
 
@@ -66,6 +67,13 @@ Read it first._
   - A 2023 code is used only if its region agrees.
   - Fallbacks: zone, then region (with SNNPR successors), then national.
   - Later: WorldPop or DHIS2 expected births.
+- **Next-quarter ranking (decided 11 Oct):**
+  - the fitted risk index is live from the start;
+  - the hybrid runs in shadow once there are 2+ years of counts;
+  - it switches only by the rules agreed in advance (SYSTEM_SPEC §10.1).
+- **Frozen forecast log, scoring job, alert verdicts and scorecard:** in M5 (SYSTEM_SPEC
+  §10.1).
+- **Test-data guard:** built. `ALLOW_TEST_DATA=true` only on a sandbox database.
 - **Gemini's model suggestions** were reviewed critically. Adopted: EWMA, the space-time
   scan, Hubverse-style output, and challenger models. Rejected: LSTM, dropping laser,
   TimescaleDB.
@@ -89,18 +97,18 @@ Read it first._
 
 ## Open decisions for the owner
 
-1. **Adopt the hybrid model in production** as the "heaviest next quarter" ranking (needs
-   2–3 years of counts), with the fitted index as fallback and as the source of
-   explanatory factors? Asked; no answer yet.
-2. **Then M4,** or more modelling first. Ignition needs real data plus a Bayesian or
-   state-space susceptible estimate.
+1. **Hybrid:** decided (see above).
+2. **Next steps:** being locked in. Questions raised:
+   - when to add the 2022 EPHI bulletins and the AHEAD/UNICEF coverage (2024 data:
+     woreda/zone MCV1 for the lowest-coverage units; regional MCV1 plus MCV2 dropout);
+   - how to show EPHI value from day one: a retrospective head-to-head on past outbreaks.
 
 ## Pending on the owner's side
 
-- Test the improvements round:
-  - `git pull`, `alembic upgrade head`, `python -m pytest tests -q` (expect 88 passed, 11
-    skipped, no warning);
-  - optionally load births, DTM and coverage (`DATABASE_SETUP.md` §6b).
+- Pull the guard: expect 93 passed, 11 skipped. Optionally load births, DTM and coverage
+  (`DATABASE_SETUP.md` §6b).
+- Bulletins: check weekly vs cumulative and woreda level; send 2–3 sample pages.
+- AHEAD: check the dropout definition and whether the data may be published.
 - Retest the AI features when Gemini quota allows; rerun `scripts/reprocess_failed.py`.
 - Change the leaked passwords (masri_dev; the `crate_admin.py` account
   dagiteferi2011@gmail.com).

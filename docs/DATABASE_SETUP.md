@@ -161,6 +161,12 @@ python -m pytest tests -q
 | `password authentication failed for user "empoweredcare"` | The password in `DATABASE_URL` doesn't match step 2 | Fix `.env`, or run `ALTER USER empoweredcare PASSWORD '...';` in SQL Shell |
 | `database "empoweredcare" does not exist` | Step 2 wasn't completed | Run the `CREATE DATABASE` line |
 | `No module named psycopg` | Packages not installed in this `.venv` | `pip install -r requirements.txt` with `(.venv)` active |
+| `Refusing to save test, simulated or demo data into this database` | A file or script labelled its rows as test, simulated or demo data (for example `source` = "simulated" or "dhis2-demo") | Working as intended: the real database never takes test data. Fix the file's `source` column if the data is real. Set `ALLOW_TEST_DATA=true` only on a separate sandbox database |
+
+**Test data never goes in this database.**
+- The simulator and the evaluation never write to it.
+- The tests use their own throwaway database.
+- Every write checks the `source` label of each row (`db/guard.py`).
 
 ## What's in the database
 

@@ -108,7 +108,7 @@ class IndicatorCount(Base):
     reports_expected: Mapped[Optional[int]] = mapped_column(Integer)
     reports_received: Mapped[Optional[int]] = mapped_column(Integer)
     reports_on_time: Mapped[Optional[int]] = mapped_column(Integer)  # timeliness (PHEM 2022 p. 74)
-    source: Mapped[str] = mapped_column(String(50), default="dhis2")  # dhis2 | simulated | manual
+    source: Mapped[str] = mapped_column(String(50), default="dhis2")  # dhis2 | manual | bulletin (test labels are refused: db/guard.py)
     reported_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
 
