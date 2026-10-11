@@ -53,7 +53,7 @@ def _week_month(iso_year: int, iso_week: int) -> tuple[int, int]:
 
 
 def build_panel(session: Session, end: tuple[int, int], years: int = 10, level: int = 2,
-                disease: str = "measles") -> Built:
+                disease: str = "measles", disruption: float = 0.0) -> Built:
     months = _months(end, years * 12)
     idx = {k: i for i, k in enumerate(months)}
     zones = session.scalars(select(OrgUnit).where(OrgUnit.level == level, OrgUnit.lat.is_not(None))
@@ -134,11 +134,23 @@ def build_panel(session: Session, end: tuple[int, int], years: int = 10, level: 
                 sia[i, j] = max(sia[i, j], c.coverage)
                 lo, hi = c.age_min_months or 9, c.age_max_months or 59
                 share[i, j] = max(0.0, min(hi - lo + 1, mr.AGE_BAND_MONTHS)) / mr.AGE_BAND_MONTHS
+    # Context pathways (SYSTEM_SPEC 5.6): displacement as a visible threat factor, and an
+    # optional coverage reduction in conflict-displacement zones for sensitivity runs.
+    from services.context import disrupted_coverage, threat_factors
+    as_of = date(*end, 1)
+    tf = threat_factors(session, as_of)
+    for pcode, mult in disrupted_coverage(session, as_of, disruption).items():
+        if pcode in zone_of:
+            j = zone_of[pcode]
+            mcv1[-12:, j] *= mult
+            mcv2[-12:, j] *= mult
+            built.notes.append(f"Coverage reduced by {disruption:.0%} in {pcode} for the last 12 months (sensitivity run).")
     built.panel = Panel(pcodes=[z.pcode for z in keep], population=pop,
                         lat=np.array([z.lat for z in keep]), lon=np.array([z.lon for z in keep]),
                         months=months, births=births, mcv1=mcv1, mcv2=mcv2, cases=cases,
                         cases_provisional=lag0, cases_provisional_lag1=lag1,
-                        sia_coverage=sia, sia_target_share=share, region=[z.parent_pcode or "" for z in keep])
+                        sia_coverage=sia, sia_target_share=share, region=[z.parent_pcode or "" for z in keep],
+                        threats=[tf.get(z.pcode, []) for z in keep])
     return built
 
 

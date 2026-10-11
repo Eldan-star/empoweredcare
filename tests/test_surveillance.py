@@ -175,3 +175,31 @@ def test_detect_reports_a_space_time_cluster(geo):
     assert {"ET040710", "ET040711", "ET040714"} <= set(top["members"])
     flagged = [r for r in res if "space_time_cluster" in r["flags"]]
     assert flagged and all(r["priority_parts"]["space_time_cluster"] == 10 for r in flagged)
+
+
+def test_dtm_loader_and_displacement_pathways(geo, tmp_path):
+    from db.models import ContextFactor
+    loader = load_script("load_dtm")
+    f = tmp_path / "dtm.csv"
+    f.write_text(
+        "adminLevel,admin1Name,admin2Name,admin2Pcode,numPresentIdpInd,reportingDate,displacementReason\n"
+        "#adm1+name,#a,#b,#c,#d,#e,#f\n"
+        "2,Oromia,Jimma,ET0407,120000,2026-03-31T00:00:00,Conflict\n"
+        "2,Oromia,Jimma,ET0407,5000,2026-03-31T00:00:00,Natural disaster\n"
+        "2,Oromia,North Shewa,ET0410,1000,2026-03-31T00:00:00,Conflict\n"
+        "1,Oromia,,,99999,2026-03-31T00:00:00,Conflict\n", encoding="utf-8")
+    rep = loader.load(geo, loader.read_dtm(f))
+    geo.flush()
+    assert rep["zones"] == 2 and not rep["skipped"]
+    vals = {(c.pcode, c.factor): c.value for c in geo.query(ContextFactor)}
+    assert vals[("ET0407", "idps_hosted")] == 125000 and vals[("ET0407", "idps_conflict")] == 120000
+    from services.context import disrupted_coverage, threat_factors
+    tf = threat_factors(geo, date(2026, 6, 1))
+    assert tf.get("ET0407") == ["displacement"] and tf.get("ET040701") == ["displacement"]  # woredas inherit
+    assert "ET0410" not in tf                                                                 # 1,000 IDPs: below thresholds
+    assert disrupted_coverage(geo, date(2026, 6, 1), 0.2) == {"ET0407": 0.8}
+    assert threat_factors(geo, date(2027, 6, 1)) == {}                                        # round too old
+    counts(geo, "ET040701", 22, [1])
+    res = surveillance.detect(geo, "measles", (2026, 22), level=3)
+    hit = next(r for r in res if r["pcode"] == "ET040701")
+    assert hit["flags"]["threat_factors"] == ["displacement"] and hit["priority_parts"]["threat_factors"] == 5

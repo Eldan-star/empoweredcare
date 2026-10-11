@@ -93,8 +93,10 @@ def detect(session: Session, disease: str = "measles", week: Optional[tuple[int,
            with_cluster: bool = False):
     """EPHI levels for every unit at `level` with any data in the last `history_weeks`
     weeks, ordered: action threshold first, then alert, then by priority."""
+    from services.context import threat_factors
     cfg = diseases.get(disease)
     week = week or current_week()
+    threats = threat_factors(session, date.fromisocalendar(*week, 1))
     start = shift(*week, -(history_weeks - 1))
     units = {u.pcode: u for u in session.scalars(select(OrgUnit).where(OrgUnit.level == level))}
     rows_by_unit = defaultdict(lambda: defaultdict(list))
@@ -103,7 +105,8 @@ def detect(session: Session, disease: str = "measles", week: Optional[tuple[int,
     out = []
     for pcode, weeks_rows in rows_by_unit.items():
         series = complete([WeekCount(y, w, **_sum(rs)) for (y, w), rs in weeks_rows.items()], start, week)
-        res = evaluate(series, cfg, humanitarian=pcode in humanitarian, weeks=[-1])[0]
+        res = evaluate(series, cfg, humanitarian=pcode in humanitarian, threat_factors=threats.get(pcode, ()),
+                       weeks=[-1])[0]
         u = units[pcode]
         out.append({"pcode": pcode, "name": u.name, "parent_pcode": u.parent_pcode, **res.as_dict()})
     cluster = _cluster(out, units, rows_by_unit, start, week)

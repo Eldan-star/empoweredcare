@@ -34,12 +34,14 @@ def main(argv=None):
     ap.add_argument("--end", default=f"{last[0]}-{last[1]:02d}", help="last month, YYYY-MM")
     ap.add_argument("--years", type=int, default=10)
     ap.add_argument("--level", type=int, default=2, help="2 = zones (default), 3 = woredas")
+    ap.add_argument("--disruption", type=float, default=0.0,
+                    help="sensitivity run: reduce coverage by this share (e.g. 0.2) in zones hosting many conflict-displaced people")
     ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args(argv)
     end = tuple(int(x) for x in args.end.split("-"))
 
     with session_scope() as s:
-        built = build_panel(s, end, args.years, args.level)
+        built = build_panel(s, end, args.years, args.level, disruption=args.disruption)
         for note in built.notes:
             print(note)
         if built.panel is None:
