@@ -14,12 +14,32 @@ from typing import Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from db.models import IndicatorCount, OrgUnit, RiskScore
+from db.models import CountSnapshot, IndicatorCount, OrgUnit, RiskScore
 from services.detection import diseases
 from services.detection.series import WeekCount, complete, shift
 from services.detection.thresholds import evaluate
 
 FIELDS = ("suspected", "confirmed", "deaths", "reports_expected", "reports_received")
+
+
+def record_counts(session: Session, rows: list[dict], observed_at, source: str = "dhis2") -> int:
+    """Store weekly counts (upsert into indicator_counts) and keep a snapshot of every
+    value as received, so the nowcast can learn how late reports usually are. Every
+    ingestion path (DHIS2 pull, manual entry) should come through here."""
+    n = 0
+    for r in rows:
+        key = dict(pcode=r["pcode"], disease=r["disease"], iso_year=r["iso_year"], iso_week=r["iso_week"], source=source)
+        row = session.scalars(select(IndicatorCount).filter_by(**key)).first() or IndicatorCount(**key)
+        for f in FIELDS:
+            if f in r:
+                setattr(row, f, r[f])
+        row.reported_at = observed_at
+        session.add(row)
+        session.add(CountSnapshot(pcode=r["pcode"], disease=r["disease"], iso_year=r["iso_year"], iso_week=r["iso_week"],
+                                  suspected=r.get("suspected"), confirmed=r.get("confirmed"),
+                                  observed_at=observed_at, source=source))
+        n += 1
+    return n
 
 
 def current_week(today: Optional[date] = None) -> tuple[int, int]:

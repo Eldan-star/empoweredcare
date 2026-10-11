@@ -140,12 +140,17 @@ def monthly(truth: eth.Truth, rep: eth.Reported) -> tuple[list[tuple[int, int]],
 
     settled = np.full((len(keys), U), np.nan)
     provisional = np.full((len(keys), U), np.nan)
+    lag1 = np.full((len(keys), U), np.nan)
+    ends = [int(np.flatnonzero(month_of == m)[-1]) for m in range(len(keys))]
     for m in range(len(keys)):
         wk = np.flatnonzero(month_of == m)
         settled[m] = agg(rep.suspected[wk])
-        s, _ = rep.as_of(int(wk[-1]))
+        s, _ = rep.as_of(ends[m])
         provisional[m] = agg(s[wk])
-    return keys, month_of, settled, provisional
+        if m + 1 < len(keys):
+            s1, _ = rep.as_of(ends[m + 1])
+            lag1[m] = agg(s1[wk])
+    return keys, month_of, settled, provisional, lag1
 
 
 LARGE_PER_100K = 100.0   # outbreak "large": >=100 true infections per 100,000 in 12 weeks
@@ -276,13 +281,14 @@ def run_scenario(units: eth.Units, sc: Scenario) -> dict:
         "alert_large": score_detection(ep_alert, large, t0, U, W - t0, transmitting),
     }
 
-    keys, month_of, cases, provisional = monthly(truth, rep)
+    keys, month_of, cases, provisional, lag1 = monthly(truth, rep)
     T = len(keys)
     births = np.tile(units.population * eth.CRUDE_BIRTH_RATE / 1000 / 12, (T, 1))
     panel = Panel(pcodes=units.pcodes, population=units.population.astype(float), lat=units.lat, lon=units.lon,
                   months=keys, births=births, mcv1=np.tile(units.mcv1, (T, 1)), mcv2=np.tile(units.mcv2, (T, 1)),
-                  cases=cases, cases_provisional=provisional, region=units.region)
+                  cases=cases, cases_provisional=provisional, cases_provisional_lag1=lag1, region=units.region)
     res = run_panel(panel)
+    res_raw = run_panel(panel, nowcast=False)  # ablation: no correction for late reports
     m0 = int(month_of[t0])
     onset_months = [(int(month_of[t]), u) for t, u in onsets]
     monthly_truth = np.zeros((T, U))
@@ -292,6 +298,7 @@ def run_scenario(units: eth.Units, sc: Scenario) -> dict:
     true_s_share = truth.biweekly_susceptibles[month_end_tick] / units.population
     from evaluation import challengers
     extra = challengers.rankings(panel, res, m0, monthly_truth, true_s_share, seed=sc.seed)
+    extra["index_no_nowcast"] = res_raw.lam
     risk = score_risk(res, panel, onset_months, monthly_truth, true_s_share, m0, seed=sc.seed, extra=extra)
     if HUB_DIR is not None:
         import csv
@@ -319,6 +326,7 @@ def run_scenario(units: eth.Units, sc: Scenario) -> dict:
 
 CANDIDATE_LABELS = [
     ("index", "**Risk index (1 month)**"), ("index_3m", "Risk index (3-month horizon)"),
+    ("index_no_nowcast", "Risk index without nowcasting (ablation)"),
     ("susceptible_share", "Our susceptible share alone (ablation)"),
     ("boosted_trees", "Challenger: gradient-boosted trees"),
     ("hybrid_regression", "**Hybrid: count regression + risk-model covariates**"),

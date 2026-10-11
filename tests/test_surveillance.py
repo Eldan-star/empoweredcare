@@ -136,3 +136,20 @@ def test_births_loader_uses_woreda_rates_with_fallbacks(geo, tmp_path):
     built = build_panel(geo, end=(2026, 6), years=2)
     assert not built.births_estimated
     assert built.panel.births[0, 0] == pytest.approx(10500 / 12)
+
+
+def test_counts_keep_snapshots_and_feed_the_nowcast(geo):
+    from datetime import datetime, timezone
+    from db.models import CountSnapshot
+    geo.add(Immunization(pcode="ET0407", year=2026, month=0, mcv1_coverage=0.5, source="t"))
+    # ISO week 10 of 2026 is in March. 2 cases known on 9 March, revised to 6 on 20 April.
+    row = {"pcode": "ET040701", "disease": "measles", "iso_year": 2026, "iso_week": 10, "suspected": 2}
+    surveillance.record_counts(geo, [row], datetime(2026, 3, 9, tzinfo=timezone.utc))
+    surveillance.record_counts(geo, [{**row, "suspected": 6}], datetime(2026, 4, 20, tzinfo=timezone.utc))
+    geo.flush()
+    assert geo.query(IndicatorCount).one().suspected == 6 and geo.query(CountSnapshot).count() == 2
+    p = build_panel(geo, end=(2026, 6), years=1).panel
+    march = p.months.index((2026, 3))
+    assert p.cases[march, 0] == 6                       # final value
+    assert p.cases_provisional[march, 0] == 2           # as seen at the end of March
+    assert p.cases_provisional_lag1[march, 0] == 6      # as seen at the end of April

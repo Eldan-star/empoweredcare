@@ -108,3 +108,18 @@ def test_panel_runs_without_look_ahead_and_flags_silence():
     cases2 = cases.copy(); cases2[28, 1] = 99
     p.cases = cases2
     assert np.array_equal(run(p).index[:28], r.index[:28])
+
+
+def test_nowcast_scales_recent_months_by_learned_completeness():
+    from services.risk import nowcast as nc
+    T, Z = 30, 4
+    settled = np.full((T, Z), 10.0)
+    seen0 = settled * 0.5          # half of each month's reports are in by its end
+    seen1 = settled * 0.8          # 80% by the end of the next month
+    assert nc.completeness(settled, seen0, t=29, lag=0) == pytest.approx(0.5)
+    known = settled.copy()
+    known[29], known[28] = seen0[29], seen1[28]
+    fixed, used = nc.apply(known, settled, {0: seen0, 1: seen1}, t=29)
+    assert used == {0: pytest.approx(0.5), 1: pytest.approx(0.8)}
+    assert np.allclose(fixed[28:], 10.0)
+    assert nc.completeness(settled, seen0, t=3, lag=0) is None   # no settled history yet

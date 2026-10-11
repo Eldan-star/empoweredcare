@@ -79,14 +79,16 @@ def rankings(panel, res, m0: int, monthly_truth: np.ndarray, true_s_share: np.nd
     T, U = panel.cases.shape
     pop = panel.population
     W = neighbour_matrix(panel.lat, panel.lon)
-    # What was known at each month: settled history plus provisional recent months.
+    # What was known at each month: the same view the risk index gets (settled history,
+    # recent months as seen at their lag, nowcast), so models compete on equal data.
+    from services.risk.panel import _known
     settled_inc = _incidence(panel.cases, pop)
-    prov_inc = _incidence(panel.cases_provisional if panel.cases_provisional is not None else panel.cases, pop)
+    _cache = {}
 
     def known(m):
-        k = settled_inc[:m + 1].copy()
-        k[max(0, m - 1):] = prov_inc[max(0, m - 1):m + 1]
-        return k
+        if m not in _cache:
+            _cache[m] = _incidence(_known(panel, m, 2, nowcast=True), pop)
+        return _cache[m]
 
     out = {name: np.zeros((T, U)) for name in
            ("persistence", "ewma", "ar1_log", "count_regression", "hybrid_regression", "boosted_trees",

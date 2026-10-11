@@ -15,14 +15,14 @@ Only zones with coverage data are scored; the result says which were skipped.
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 
 import numpy as np
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from db.models import Campaign, Demographics, Immunization, IndicatorCount, OrgUnit, RiskScore
+from db.models import Campaign, CountSnapshot, Demographics, Immunization, IndicatorCount, OrgUnit, RiskScore
 from services.risk import measles_risk as mr
 from services.risk.panel import Panel, PanelResult, run
 
@@ -121,6 +121,8 @@ def build_panel(session: Session, end: tuple[int, int], years: int = 10, level: 
         if j is not None and i is not None:
             cases[i, j] = (0 if np.isnan(cases[i, j]) else cases[i, j]) + r.suspected
 
+    lag0, lag1 = _lagged_from_snapshots(session, months, idx, zone_of, lengths, disease)
+
     sia = np.zeros((T, Z))
     share = np.full((T, Z), 51 / 180)
     for c in session.scalars(select(Campaign).where(func.lower(Campaign.vaccine).like("%measles%"))):
@@ -135,8 +137,48 @@ def build_panel(session: Session, end: tuple[int, int], years: int = 10, level: 
     built.panel = Panel(pcodes=[z.pcode for z in keep], population=pop,
                         lat=np.array([z.lat for z in keep]), lon=np.array([z.lon for z in keep]),
                         months=months, births=births, mcv1=mcv1, mcv2=mcv2, cases=cases,
+                        cases_provisional=lag0, cases_provisional_lag1=lag1,
                         sia_coverage=sia, sia_target_share=share, region=[z.parent_pcode or "" for z in keep])
     return built
+
+
+def _month_end(y: int, m: int) -> datetime:
+    nxt = date(y + (m == 12), m % 12 + 1, 1)
+    return datetime.combine(nxt, datetime.min.time(), tzinfo=timezone.utc)
+
+
+def _lagged_from_snapshots(session, months, idx, zone_of, lengths, disease):
+    """Monthly zone counts as they looked at the end of the same month (lag 0) and of the
+    next month (lag 1), rebuilt from count_snapshots. (None, None) when there are no
+    snapshots, in which case no nowcast is applied."""
+    snaps = session.scalars(select(CountSnapshot).where(func.lower(CountSnapshot.disease) == disease)
+                            .order_by(CountSnapshot.observed_at)).all()
+    if not snaps:
+        return None, None
+    by_week = defaultdict(list)
+    for sn in snaps:
+        j = next((zone_of[sn.pcode[:n]] for n in lengths if sn.pcode[:n] in zone_of), None)
+        i = idx.get(_week_month(sn.iso_year, sn.iso_week))
+        if j is not None and i is not None:
+            by_week[(sn.pcode, sn.iso_year, sn.iso_week)].append((sn.observed_at, sn.suspected, i, j))
+    T, Z = len(months), len(zone_of)
+    out = []
+    for lag in (0, 1):
+        arr = np.full((T, Z), np.nan)
+        for versions in by_week.values():
+            i, j = versions[0][2], versions[0][3]
+            if i + lag >= T:
+                continue
+            cutoff = _month_end(*months[i + lag])
+            seen = [v for obs, v, _, _ in versions if _aware(obs) <= cutoff and v is not None]
+            if seen:
+                arr[i, j] = (0 if np.isnan(arr[i, j]) else arr[i, j]) + seen[-1]
+        out.append(arr)
+    return out[0], out[1]
+
+
+def _aware(dt: datetime) -> datetime:
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 def store(session: Session, panel: Panel, res: PanelResult, last_months: int = 12) -> int:

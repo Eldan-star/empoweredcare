@@ -30,6 +30,8 @@ class Panel:
     # given, month t sees provisional values for its last `settle_months` months and settled
     # values before that, as the live system would.
     cases_provisional: Optional[np.ndarray] = None
+    # Backtests only: what had arrived by the end of the FOLLOWING month (lag 1).
+    cases_provisional_lag1: Optional[np.ndarray] = None
     sia_coverage: Optional[np.ndarray] = None   # (months, zones), 0 where no campaign
     sia_target_share: object = 51 / 180         # 9-59 months under an even spread; or (months, zones)
     region: Optional[list[str]] = None          # region code per zone, for pooling rho
@@ -66,19 +68,39 @@ def _rho_for_month(panel: Panel, unvacc: np.ndarray, cases: np.ndarray, t: int,
     return rho, np.array([e is not None for e in est])
 
 
-def _known(panel: Panel, t: int, settle_months: int) -> np.ndarray:
-    """Cases for months 0..t as known at the end of month t."""
-    if panel.cases_provisional is None:
+def _seen_by_lag(panel: Panel) -> dict:
+    out = {}
+    if panel.cases_provisional is not None:
+        out[0] = panel.cases_provisional
+    if panel.cases_provisional_lag1 is not None:
+        out[1] = panel.cases_provisional_lag1
+    return out
+
+
+def _known(panel: Panel, t: int, settle_months: int, nowcast: bool = False) -> np.ndarray:
+    """Cases for months 0..t as known at the end of month t: settled history, then each
+    recent month as seen at its lag (lag 0 = this month), optionally nowcast."""
+    seen = _seen_by_lag(panel)
+    if not seen:
         return panel.cases[:t + 1]
     k = panel.cases[:t + 1].copy()
-    lo = max(0, t - settle_months + 1)
-    k[lo:] = panel.cases_provisional[lo:t + 1]
+    for lag in range(settle_months):
+        m = t - lag
+        if m < 0:
+            break
+        src = seen.get(lag, seen.get(0))  # no lag-1 view: the lag-0 view is the best known
+        if src is not None:
+            k[m] = src[m]
+    if nowcast:
+        from services.risk import nowcast as nc
+        k, _ = nc.apply(k, panel.cases, {lag: v for lag, v in seen.items() if lag < settle_months}, t)
     return k
 
 
 def run(panel: Panel, incidence_months: int = 2, silent_months: int = 1, min_months: int = 24,
         prior_months: float = 36.0, ve1: float = mr.VE1, ve2: float = mr.VE2, r0: float = mr.R0,
-        settle_months: int = 2, rho_window_months: int = 96, **gravity) -> PanelResult:
+        settle_months: int = 2, rho_window_months: int = 96, nowcast: bool = True,
+        **gravity) -> PanelResult:
     T, Z = panel.births.shape
     peff = mr.p_eff(panel.mcv1, panel.mcv2, ve1, ve2)
     unvacc = panel.births * (1 - peff)
@@ -91,7 +113,7 @@ def run(panel: Panel, incidence_months: int = 2, silent_months: int = 1, min_mon
     s0 = mr.initial_susceptibles(panel.population, r0)
     s = s0
     for t in range(T):
-        known = _known(panel, t, settle_months)
+        known = _known(panel, t, settle_months, nowcast)
         reported = ~np.isnan(known)
         cases = np.nan_to_num(known, nan=0.0)
         rho, estimated = _rho_for_month(panel, unvacc, cases, t, min_months, prior_months, rho_window_months)
