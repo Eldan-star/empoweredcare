@@ -33,6 +33,7 @@ from services.risk.panel import Panel, run as run_panel
 from simulation import ethiopia as eth
 
 REPORTS = Path(__file__).resolve().parent / "reports"
+HUB_DIR: Optional[Path] = None  # set by --hub: write Hubverse-layout model output (large)
 MEASLES = diseases.get("measles")
 
 
@@ -184,7 +185,8 @@ def rank_targets(candidates: dict, target: np.ndarray, m0: int, k_share: float,
 
 
 def score_risk(res, panel: Panel, onset_months: list[tuple[int, int]], monthly_truth: np.ndarray,
-               true_s_share: np.ndarray, m0: int, k_share: float = 0.1, seed: int = 0) -> dict:
+               true_s_share: np.ndarray, m0: int, k_share: float = 0.1, seed: int = 0,
+               extra: Optional[dict] = None) -> dict:
     """Two questions, matching how the index would be used:
     - high burden: which units will carry the most measles next quarter (top 10% by true
       incidence)? Scored over all units.
@@ -199,23 +201,32 @@ def score_risk(res, panel: Panel, onset_months: list[tuple[int, int]], monthly_t
         nxt[m] = monthly_truth[m + 1:m + 4].sum(axis=0) / pop * 1e5
     cutoff = np.quantile(nxt, 1 - TOP_BURDEN_SHARE, axis=1, keepdims=True)
     high_burden = nxt >= cutoff
+    near_burden = nxt >= np.quantile(nxt, 1 - 2 * TOP_BURDEN_SHARE, axis=1, keepdims=True)
     onset_next = np.zeros((T, U), bool)
     for m, u in onset_months:
         onset_next[max(0, m - 3):m, u] = True
     known = np.nan_to_num(panel.cases)
-    quiet = np.array([known[max(0, m - QUIET_MONTHS + 1):m + 1].sum(axis=0) == 0 for m in range(T)])
+    prov = np.nan_to_num(panel.cases_provisional) if panel.cases_provisional is not None else known
+
+    def as_known(m):  # settled history, provisional for the latest two months
+        k = known[max(0, m - 11):m + 1].copy()
+        k[-2:] = prov[max(0, m - 1):m + 1][-len(k[-2:]):]
+        return k
+    quiet = np.array([as_known(m)[-QUIET_MONTHS:].sum(axis=0) == 0 for m in range(T)])
     rng = np.random.default_rng(seed)
-    last12 = np.array([known[max(0, m - 11):m + 1].sum(axis=0) for m in range(T)])
+    last12 = np.array([as_known(m).sum(axis=0) for m in range(T)])
     candidates = {
         "index": res.lam, "index_3m": res.index_3m,
         "susceptible_share": res.s / pop,                    # ablation: our S only
         "low_mcv1": 1 - panel.mcv1, "last_12m_cases": last12, "random": rng.random((T, U)),
-        "oracle_true_susceptibles": true_s_share,            # ceiling: simulator's true S
+        "oracle_true_susceptibles": true_s_share,            # reference: simulator's true S
+        **(extra or {}),
     }
     cut = lambda a: a[:m_end]
     cands = {n: cut(v) for n, v in candidates.items()}
     out = {"k_share": k_share,
            "high_burden_next_quarter": rank_targets(cands, cut(high_burden), m0, k_share),
+           "near_miss_top20_next_quarter": rank_targets(cands, cut(near_burden), m0, k_share),
            "ignition_next_quarter": rank_targets(cands, cut(onset_next), m0, k_share, eligible=cut(quiet))}
     lead1, lead3 = [], []
     for m, u in onset_months:
@@ -279,7 +290,16 @@ def run_scenario(units: eth.Units, sc: Scenario) -> dict:
     month_end_tick = [min(int(np.flatnonzero(month_of == m)[-1]) // 2, truth.biweekly_susceptibles.shape[0] - 1)
                       for m in range(T)]
     true_s_share = truth.biweekly_susceptibles[month_end_tick] / units.population
-    risk = score_risk(res, panel, onset_months, monthly_truth, true_s_share, m0, seed=sc.seed)
+    from evaluation import challengers
+    extra = challengers.rankings(panel, res, m0, monthly_truth, true_s_share, seed=sc.seed)
+    risk = score_risk(res, panel, onset_months, monthly_truth, true_s_share, m0, seed=sc.seed, extra=extra)
+    if HUB_DIR is not None:
+        import csv
+        HUB_DIR.mkdir(parents=True, exist_ok=True)
+        rows = challengers.hubverse_rows({"risk_index": res.lam, **extra}, panel, m0, sc.name)
+        with open(HUB_DIR / f"{sc.name}.csv", "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=list(rows[0]))
+            w.writeheader(), w.writerows(rows)
 
     final_rho = res.rho[-1]
     est = res.rho_estimated[-1]
@@ -296,6 +316,23 @@ def run_scenario(units: eth.Units, sc: Scenario) -> dict:
 
 
 # --- Report ------------------------------------------------------------------------------
+
+CANDIDATE_LABELS = [
+    ("index", "**Risk index (1 month)**"), ("index_3m", "Risk index (3-month horizon)"),
+    ("susceptible_share", "Our susceptible share alone (ablation)"),
+    ("boosted_trees", "Challenger: gradient-boosted trees"),
+    ("hybrid_regression", "**Hybrid: count regression + risk-model covariates**"),
+    ("count_regression", "Challenger: endemic-epidemic count regression (hhh4-type)"),
+    ("ar1_log", "Challenger: ARIMA(1,0,0) on log counts"),
+    ("ewma", "Challenger: EWMA of reported incidence"),
+    ("persistence", "Challenger: reported incidence, last 3 months"),
+    ("low_mcv1", "Baseline: lowest MCV1"), ("last_12m_cases", "Baseline: most cases last 12 months"),
+    ("random", "Baseline: random"),
+    ("oracle_true_susceptibles", "_Reference: simulator's true susceptibles_"),
+    ("oracle_recent_truth", "_Reference: true recent infections (perfect nowcast)_"),
+    ("oracle_mechanistic", "_Reference: risk formula with true inputs (its ceiling)_"),
+]
+
 
 def _f(v, pct=False, nd=2):
     if v is None or (isinstance(v, float) and np.isnan(v)):
@@ -329,15 +366,14 @@ def markdown(results: list[dict], units: eth.Units, name: str) -> str:
             L.append(f"| {label} | {d['outbreaks']} | {_f(d['sensitivity'], True)} | {_f(d['ppv'], True)} | "
                      f"{_f(d['false_episodes_per_unit_year'])} | {_f(d['median_delay_days'], nd=0)} | {_f(d['share_detected_before_onset'], True)} |")
         for tkey, tlabel in [("high_burden_next_quarter", "the 10% of units with the highest true incidence next quarter (all units)"),
+                             ("near_miss_top20_next_quarter", "the top 20% by true incidence next quarter (near misses count)"),
                              ("ignition_next_quarter", f"a new outbreak next quarter, among units with no reported case in the last {QUIET_MONTHS} months")]:
             t = rk[tkey]
             L += ["", f"**Risk ranking: top 10% vs {tlabel}** (base rate {_f(t['base_rate'], True)}, {t['months_scored']} months, median k {_f(t['median_k'], nd=0)})", "",
                   "| Ranking | Precision@k | Recall@k |", "|---|---|---|"]
-            for key, label in [("index", "**Risk index (1 month)**"), ("index_3m", "Risk index (3-month horizon)"),
-                               ("susceptible_share", "Our susceptible share alone (ablation)"),
-                               ("low_mcv1", "Baseline: lowest MCV1"), ("last_12m_cases", "Baseline: most cases last 12 months"),
-                               ("random", "Baseline: random"), ("oracle_true_susceptibles", "_Reference: simulator's true susceptibles_")]:
-                L.append(f"| {label} | {_f(t['precision_at_k'][key], True)} | {_f(t['recall_at_k'][key], True)} |")
+            for key, label in CANDIDATE_LABELS:
+                if key in t["precision_at_k"]:
+                    L.append(f"| {label} | {_f(t['precision_at_k'][key], True)} | {_f(t['recall_at_k'][key], True)} |")
         L += ["", f"Ignitions whose unit was in the top 10% of quiet units one month before: {_f(rk['ignitions_in_top_k_1_month_before'], True)}; "
               f"three months before: {_f(rk['ignitions_in_top_k_3_months_before'], True)}.", "",
               f"Reconstruction: reporting rate estimated for {rc['rho_estimated_units']} units, median absolute error "
@@ -358,7 +394,11 @@ def main(argv: Optional[list[str]] = None) -> dict:
     ap.add_argument("--quick", action="store_true", help="small, fast run (smoke test)")
     ap.add_argument("--name", default="m3-baseline")
     ap.add_argument("--no-write", action="store_true")
+    ap.add_argument("--hub", action="store_true", help="also write Hubverse-layout model output to evaluation/hub/ (large)")
     args = ap.parse_args(argv)
+    global HUB_DIR
+    if args.hub:
+        HUB_DIR = Path(__file__).resolve().parent / "hub"
 
     if args.units == "db":
         from db.session import SessionLocal

@@ -108,3 +108,31 @@ def test_risk_runner_builds_scores_and_stores_them(geo):
 
 def test_risk_runner_explains_missing_inputs(db):
     assert build_panel(db, end=(2026, 6)).panel is None
+
+
+def test_births_loader_uses_woreda_rates_with_fallbacks(geo, tmp_path):
+    import pandas as pd
+    from db.models import Demographics
+    loader = load_script("load_births")
+    book = tmp_path / "eth_admpop_2023.xlsx"
+    with pd.ExcelWriter(book) as w:
+        pd.DataFrame({"admin3Name_en": ["Seka", "Old woreda", "Reused code"],
+                      "admin3Pcode": ["ET040701", "ET049999", "ET041001"],
+                      "admin1Name_en": ["Oromia", "Oromia", "Amhara"],
+                      "Total": [100_000, 50_000, 10_000], "T_00_04": [15_000, 9_000, 4_000]}).to_excel(
+            w, sheet_name="ETH_admpop_adm3_2023", index=False)
+    rates = loader.read_rates(book, adjustment=1.0)
+    assert rates["woreda"]["ET040701"][0] == pytest.approx(30.0)   # 15,000 / 5 / 100,000 x 1,000
+    rows = {r.pcode: r for r in loader.assign({u.pcode: u for u in geo.query(OrgUnit)}, rates, 2026, successors={})}
+    assert rows["ET040701"].method == "woreda under-5" and rows["ET040701"].births == pytest.approx(6000)
+    assert rows["ET040702"].method == "zone average" and rows["ET040702"].birth_rate == pytest.approx(30.0)
+    # ET041001 exists, but in 2023 that code was an Amhara woreda: not used; region average instead.
+    assert rows["ET041001"].method == "region average"
+    assert rows["ET0407"].method == "sum of woredas" and rows["ET0407"].births == pytest.approx(6000 + 4500)
+    geo.add_all(rows.values())
+    geo.add_all([Immunization(pcode="ET0407", year=2024, month=0, mcv1_coverage=0.5, source="t"),
+                 Immunization(pcode="ET0410", year=2024, month=0, mcv1_coverage=0.5, source="t")])
+    geo.flush()
+    built = build_panel(geo, end=(2026, 6), years=2)
+    assert not built.births_estimated
+    assert built.panel.births[0, 0] == pytest.approx(10500 / 12)

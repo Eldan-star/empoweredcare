@@ -121,7 +121,25 @@ def load(session, level_files: dict, population: dict, source: str, aliases: dic
                         for a, b, km, d in pairs)
         summary["units"][LEVEL_NAMES.get(level, f"level {level}")] = len(units)
         summary["adjacent_pairs"][LEVEL_NAMES.get(level, f"level {level}")] = len(pairs)
+    summary["population_rolled_up"] = roll_up_population(session)
     return summary
+
+
+def roll_up_population(session) -> int:
+    """Give zones and regions without a population the sum of their children (the COD-PS
+    table has woreda totals only). Units that already have a population keep it."""
+    units = list(session.scalars(select(OrgUnit)))
+    children = {}
+    for u in units:
+        children.setdefault(u.parent_pcode, []).append(u)
+    filled = 0
+    for u in sorted(units, key=lambda x: -x.level):  # deepest first, so zones fill before regions
+        kids = children.get(u.pcode, [])
+        if u.population is None and kids and all(k.population is not None for k in kids):
+            u.population = sum(k.population for k in kids)
+            filled += 1
+    session.flush()
+    return filled
 
 
 def main():
@@ -158,7 +176,8 @@ def main():
           + ", ".join(f"{n} {k}s" for k, n in summary["units"].items()))
     print("Neighbouring pairs: " + ", ".join(f"{n} between {k}s" for k, n in summary["adjacent_pairs"].items()))
     if population:
-        print(f"Population matched for {summary['population_matched']} units.")
+        print(f"Population matched for {summary['population_matched']} units; "
+              f"{summary['population_rolled_up']} zones/regions given the sum of their woredas.")
     if summary["aliases_added"]:
         print(f"Extra spellings attached from {args.aliases.name}: {summary['aliases_added']}.")
     if summary["orphans"]:

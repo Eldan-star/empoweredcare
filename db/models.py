@@ -146,6 +146,58 @@ class Campaign(Base):
     source: Mapped[Optional[str]] = mapped_column(String(100))
 
 
+class Demographics(Base):
+    """Annual births (and the under-5 count they came from) per unit. Kept apart from
+    `immunization` so births and coverage can come from different sources."""
+
+    __tablename__ = "demographics"
+    __table_args__ = (UniqueConstraint("pcode", "year", "source"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pcode: Mapped[str] = mapped_column(ForeignKey("org_units.pcode"), index=True)
+    year: Mapped[int] = mapped_column(Integer)
+    births: Mapped[Optional[float]] = mapped_column(Float)          # per year
+    birth_rate: Mapped[Optional[float]] = mapped_column(Float)      # per 1,000 per year
+    method: Mapped[Optional[str]] = mapped_column(String(100))      # e.g. "woreda under-5", "zone average"
+    source: Mapped[str] = mapped_column(String(100))
+
+
+class CountSnapshot(Base):
+    """What a weekly count looked like when it was received. Counts are revised as late
+    reports arrive; keeping each version lets the nowcast learn how complete recent weeks
+    usually are (METHODOLOGY 7.1)."""
+
+    __tablename__ = "count_snapshots"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pcode: Mapped[str] = mapped_column(String(32), index=True)
+    disease: Mapped[str] = mapped_column(String(50))
+    iso_year: Mapped[int] = mapped_column(Integer)
+    iso_week: Mapped[int] = mapped_column(Integer)
+    suspected: Mapped[Optional[int]] = mapped_column(Integer)
+    confirmed: Mapped[Optional[int]] = mapped_column(Integer)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    source: Mapped[str] = mapped_column(String(50), default="dhis2")
+
+
+class ContextFactor(Base):
+    """Context for a unit and period: displacement, conflict events, access. Used only
+    through the named pathways in SYSTEM_SPEC 5.6 (threat factor, surveillance quality,
+    optional vaccination disruption), never as a hidden multiplier."""
+
+    __tablename__ = "context_factors"
+    __table_args__ = (UniqueConstraint("pcode", "factor", "period_start", "source"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    pcode: Mapped[str] = mapped_column(ForeignKey("org_units.pcode"), index=True)
+    factor: Mapped[str] = mapped_column(String(40), index=True)   # idps_hosted | conflict_events | ...
+    value: Mapped[Optional[float]] = mapped_column(Float)
+    period_start: Mapped[date] = mapped_column(Date)
+    period_end: Mapped[Optional[date]] = mapped_column(Date)
+    source: Mapped[str] = mapped_column(String(100))
+    note: Mapped[Optional[str]] = mapped_column(Text)
+
+
 # --- Event-based surveillance, alerts, models ------------------------------------
 
 class Signal(TimestampMixin, Base):

@@ -22,7 +22,7 @@ import numpy as np
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from db.models import Campaign, Immunization, IndicatorCount, OrgUnit, RiskScore
+from db.models import Campaign, Demographics, Immunization, IndicatorCount, OrgUnit, RiskScore
 from services.risk import measles_risk as mr
 from services.risk.panel import Panel, PanelResult, run
 
@@ -56,8 +56,16 @@ def build_panel(session: Session, end: tuple[int, int], years: int = 10, level: 
                 disease: str = "measles") -> Built:
     months = _months(end, years * 12)
     idx = {k: i for i, k in enumerate(months)}
-    zones = session.scalars(select(OrgUnit).where(OrgUnit.level == level, OrgUnit.population.is_not(None),
-                                                  OrgUnit.lat.is_not(None)).order_by(OrgUnit.pcode)).all()
+    zones = session.scalars(select(OrgUnit).where(OrgUnit.level == level, OrgUnit.lat.is_not(None))
+                            .order_by(OrgUnit.pcode)).all()
+    # Databases loaded before population roll-up: sum the units inside each zone.
+    child_pop = defaultdict(int)
+    for u in session.scalars(select(OrgUnit).where(OrgUnit.level == level + 1, OrgUnit.population.is_not(None))):
+        child_pop[u.parent_pcode] += u.population
+    for z in zones:
+        if z.population is None and child_pop.get(z.pcode):
+            z.population = child_pop[z.pcode]
+    zones = [z for z in zones if z.population]
     if not zones:
         return Built(None, notes=[f"No level-{level} units with population and centroid. Load the OCHA boundaries first."])
 
@@ -88,8 +96,18 @@ def build_panel(session: Session, end: tuple[int, int], years: int = 10, level: 
             births[i, j] = r.births if r.births else np.nan
     pop = np.array([z.population for z in keep], float)
     if np.isnan(births).any():
-        built.births_estimated = True
-        est = np.tile(pop * CRUDE_BIRTH_RATE / 1000 / 12, (T, 1))
+        # Next: births per unit from the demographics table (scripts/load_births.py),
+        # else the national crude birth rate.
+        demo = {}
+        for d in session.scalars(select(Demographics).order_by(Demographics.year)):
+            demo[d.pcode] = d
+        rate = np.array([(demo[z.pcode].births / z.population * 1000) if z.pcode in demo and demo[z.pcode].births
+                         else np.nan for z in keep])
+        built.births_estimated = bool(np.isnan(rate).any())
+        rate = np.where(np.isnan(rate), CRUDE_BIRTH_RATE, rate)
+        if not built.births_estimated:
+            built.notes.append("Births: per-zone rates from the demographics table.")
+        est = np.tile(pop * rate / 1000 / 12, (T, 1))
         births = np.where(np.isnan(births), est, births)
     mcv1 = np.nan_to_num(mcv1, nan=0.0)
 
