@@ -105,6 +105,7 @@ Tests: `python -m pytest tests -q`. See [docs/TESTING_GUIDE.md](docs/TESTING_GUI
 
 | Document | For |
 |---|---|
+| [docs/PROJECT_STATE.md](docs/PROJECT_STATE.md) | Current status, decisions and open items (start here when resuming work) |
 | [docs/SYSTEM_SPEC.md](docs/SYSTEM_SPEC.md) | What the system is, every design decision, and the build plan |
 | [docs/METHODOLOGY.md](docs/METHODOLOGY.md) | Every model and AI use, with evidence and limits, for expert review |
 | [docs/EVALUATION.md](docs/EVALUATION.md) | Results of testing detection and the risk index on simulated outbreaks |
