@@ -108,6 +108,40 @@ python scripts\geocode_signals.py --all
 
 **About population.** The OCHA table is CSA's official projection, about 111.6 million in total. UN and WorldPop estimates are higher (around 130 million). The risk model in M3 will use one source consistently.
 
+## 6b. Add births, vaccination coverage and displacement (for the risk model)
+
+These feed the measles risk model (`scripts/run_risk.py`). Put the downloads in
+`data\boundaries` like the others. Run each with `--dry-run` first, then again without it.
+
+**Births per woreda.** From the same OCHA page as the population file
+(https://data.humdata.org/dataset/cod-ps-eth), download `eth_admpop_2023.xlsx`:
+```
+python scripts\load_births.py --table data\boundaries\eth_admpop_2023.xlsx
+```
+✅ It reports about 1,250 units and roughly 3.3 million births a year.
+- Each woreda gets its own rate where its 2023 code still exists.
+- Woredas whose code changed take their zone's or region's rate (the line also shows how
+  many units used each method).
+
+**Displacement (IOM DTM).** From https://data.humdata.org/dataset/eth-iom-dtm-from-api
+download the CSV for admin levels 0–2:
+```
+python scripts\load_dtm.py --csv data\boundaries\<the downloaded file>.csv
+```
+✅ About 100 zones matched. A couple of old zone codes are listed as not matched; that's
+expected.
+
+**Vaccination coverage.** There is no single download yet. Make a small CSV with the
+columns `pcode,year,mcv1,mcv2,source`:
+- one national line per year from WHO/UNICEF (WUENIC), with `ET` as the pcode;
+- later, zone lines from IHME or DHIS2.
+
+A national line is applied to every zone. Then:
+```
+python scripts\load_immunization.py --coverage data\coverage.csv
+python scripts\run_risk.py --dry-run
+```
+
 ## 7. Check it (optional)
 
 ```

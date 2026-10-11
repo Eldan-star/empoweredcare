@@ -146,6 +146,12 @@ checked by hand.
 | `services/surveillance.py` | The database queries behind `/surveillance/detect`, `/timeseries` and `/risk` |
 | `simulation/ethiopia.py` | Simulated Ethiopian measles from IDM's laser-measles, plus a reporting layer that adds delays and gaps |
 | `evaluation/harness.py` | Scores detection and the risk index on the simulation and writes `evaluation/reports/` |
+| `evaluation/challengers.py` | The rival models the risk index is compared against: persistence, EWMA, ARIMA(1,0,0), count regression (hhh4-type), the hybrid, gradient-boosted trees, and the perfect-knowledge references |
+| `services/risk/nowcast.py` | Corrects the most recent months for reports that have not arrived yet, using how complete such months usually were |
+| `services/risk/fit.py` | Chooses the risk model's settings (distance decay, background introductions, coverage anchoring) on past reported data |
+| `services/detection/scan.py` | Space-time cluster detection (the method SaTScan uses): finds groups of neighbouring places with unusually many recent cases |
+| `services/context.py` | Turns displacement figures into the agreed pathways: a visible threat factor, and an optional coverage-reduction sensitivity run |
+| `scripts/load_births.py`, `scripts/load_dtm.py` | Load births per woreda (from OCHA under-5 counts) and IOM displacement per zone |
 
 ---
 

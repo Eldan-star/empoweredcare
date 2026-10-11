@@ -521,6 +521,15 @@ Full numbers: `evaluation/reports/2026-10-10-m3-baseline.md`. Plain-language sum
 | Background introductions | 0.1 infection-equivalents per month | Keeps the ranking informative between epidemics |
 | Priority points within a level | Approaching action 20; each early-rise method 10 (max 4); CFR flag 20; risk index up to 30; each threat factor 5 (max 2) | Transparent ordering; to be reviewed with EPHI |
 | Simulator R0 | β × 14 days, about 8 | Starts laser-measles near its own equilibrium |
+| EWMA flag | λ = 0.3, limit L = 3, same baseline and guard as CUSUM | Conventional EWMA-chart values (Roberts 1959) |
+| Space-time scan | Circles up to the 15 nearest units within 100 km; windows of 1–4 weeks ending this week; 199 permutations; secondary clusters reported if they don't overlap; p ≤ 0.05 raises priority by 10 | Kulldorff 2005 space-time permutation model; circles centred on units with recent cases, for speed |
+| Nowcast | Completeness for lags 0 and 1, from months settled 4+ months earlier, last 24 months, pooled; inflation capped at 5x | Simplest standard (chain-ladder) nowcast; Bayesian versions are the next step |
+| Births | OCHA 2023 under-5 ÷ 5 × 1.025 (child deaths), applied to 2026 population; zone, region (with SNNPR successors) or national fallback | Regional differences are real (Addis Ababa ~16, Somali ~37 per 1,000); woreda detail within a region is not in the source |
+| Coverage anchoring of susceptibles | Weight 0–1 between case-based and coverage-based pools (geometric blend) | Chosen by fitting; tested in the evaluation |
+| Depletion cap (option) | At most 30% of the pool removed per month | Tested in the evaluation |
+| Fitting grid | Distance exponent c ∈ {1, 2, 3}; background ∈ {0.01, 0.1, 1}; anchoring ∈ {0, 0.5, 1}; best precision@10% on reported next-quarter incidence, warm-up years only | Reported, never true, data; no overlap with the scored period |
+| Displacement threat factor | IOM DTM IDPs ≥ 10% of a zone's population or ≥ 100,000, rounds up to 12 months old; inherited by the zone's woredas; +5 priority | About 18 of 107 zones in the August 2024 round |
+| Coverage disruption (sensitivity only) | Off by default; `--disruption 0.2` reduces coverage 20% for 12 months in zones where conflict IDPs ≥ 5% of the population | Size of the real effect unknown; used for sensitivity, not as a default |
 
 ## 6. IDM, laser-measles, and why we use them the way we do
 
@@ -574,11 +583,11 @@ collaboration with IDM on that calibration.
 
 | # | Method | Purpose | Evidence | Python route | Trigger to start |
 |---|---|---|---|---|---|
-| 7.1 | **Nowcasting** of reporting delays | Estimate this week's true count before late reports arrive | Bayesian nowcasting [30]; NobBS [31] | Re-implement in PyMC / NumPyro | Reporting-date history from DHIS2 |
-| 7.2 | **Endemic–epidemic model** (hhh4-type) | Decompose counts into endemic, within-unit and neighbour-driven parts; probabilistic forecasts | [32, 33] | It is a negative-binomial regression with autoregressive and neighbourhood terms. Re-implement, and check against R `surveillance` output | Multi-year weekly history |
+| 7.1 | **Nowcasting** of reporting delays | Estimate this week's true count before late reports arrive | Bayesian nowcasting [30]; NobBS [31] | **First version built** (chain-ladder, `services/risk/nowcast.py`); Bayesian version in PyMC/NumPyro later | Production: count snapshots are now stored on every ingest |
+| 7.2 | **Endemic–epidemic model** (hhh4-type) | Decompose counts into endemic, within-unit and neighbour-driven parts; probabilistic forecasts | [32, 33] | **Built as a challenger** (Poisson regression with own, neighbour, coverage and season terms; `evaluation/challengers.py`), plus a hybrid with risk-model covariates | Real history, to fit and validate |
 | 7.3 | **Bayesian spatio-temporal** (BYM2-type) | Smooth risk across small areas with uncertainty | INLA is the usual tool but is R-only | PyMC / NumPyro. **Flag:** departs from common practice | Multi-year history |
-| 7.4 | **Gradient boosting** (XGBoost) [34] | (a) Rank incoming signals by probability of verification; (b) a challenger risk model | Supported, but needs labels | Native Python | (a) A few hundred officer verdicts; (b) real history |
-| 7.5 | **Space-time scan statistics** [35, 36] | Detect clusters without a fixed unit, useful for zoonoses and new diseases | Established | Re-implement, or use an existing Python library | Disease #2 |
+| 7.4 | **Gradient boosting** [34] | (a) Rank incoming signals by probability of verification; (b) a challenger risk model | Supported, but needs labels | (b) **Built as a challenger** (scikit-learn, Poisson loss); (a) needs officer verdicts | (a) A few hundred officer verdicts |
+| 7.5 | **Space-time scan statistics** [35, 36] | Detect clusters without a fixed unit | Established | **Built** for measles (`services/detection/scan.py`), also usable for zoonoses | – |
 | 7.6 | **Fitted TSIR forecast** [2, 13, 14] | Probabilistic measles forecast | Established | Native Python | Multi-year history |
 
 **Question for the reviewer.** Is PyMC/NumPyro an acceptable substitute for INLA, given our
