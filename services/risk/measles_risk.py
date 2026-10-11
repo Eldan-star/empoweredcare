@@ -43,7 +43,7 @@ def initial_susceptibles(population, r0: float = R0):
 
 
 def step_susceptibles(s_prev, births, peff, cases, reporting_rate, sia_immunized=0.0,
-                      age_band_months: int = AGE_BAND_MONTHS):
+                      age_band_months: int = AGE_BAND_MONTHS, max_depletion: Optional[float] = None):
     """One month of S_t = S_{t-1} + B(1-P_eff) - C/rho - SIA - ageing.
 
     Ageing removes S/age_band per month, assuming susceptibles spread evenly across the
@@ -54,6 +54,10 @@ def step_susceptibles(s_prev, births, peff, cases, reporting_rate, sia_immunized
     infections = np.asarray(cases, dtype=float) / rho
     ageing = s_prev / age_band_months
     s = s_prev + gained - ageing
+    if max_depletion is not None:
+        # Robustness option: one month of (noisy) case data may remove at most this share
+        # of the pool, so a single misreported month cannot wipe it out.
+        infections = np.minimum(infections, max_depletion * s)
     s = s - np.minimum(infections, s)
     s = s - np.minimum(np.asarray(sia_immunized, dtype=float), s)
     return np.maximum(s, 0.0)
@@ -171,10 +175,31 @@ class RiskResult:
     factors: list[dict] = field(default_factory=list)
 
 
+S_ANCHOR_WEIGHT = 1.0  # 1 = susceptibles from case data only; 0 = from coverage only
+
+
+def anchored_susceptibles(s, population, peff, weight: float = S_ANCHOR_WEIGHT):
+    """Blend the case-based susceptible pool with a coverage-based one.
+
+    The case-based pool (births minus estimated infections) is a small difference of large
+    noisy numbers. Coverage alone gives a steadier relative measure: a unit's share of each
+    cohort left unprotected, (1 - P_eff). The blend is geometric on the share scale, with
+    the coverage-based share rescaled to the same national mean, so weight 1 returns the
+    case-based pool unchanged and weight 0 ranks by coverage only."""
+    n = np.maximum(np.asarray(population, float), 1.0)
+    share_case = np.maximum(np.asarray(s, float) / n, 1e-9)
+    if weight >= 1.0:
+        return np.asarray(s, float)
+    unprot = np.maximum(1 - np.asarray(peff, float), 1e-6)
+    share_cov = unprot * share_case.mean() / unprot.mean()
+    return n * np.exp(weight * np.log(share_case) + (1 - weight) * np.log(share_cov))
+
+
 def score(s, population, incidence, distance_km, births_per_month, peff,
           silent: Optional[Sequence[bool]] = None, threats: Optional[Sequence[Sequence[str]]] = None,
-          **gravity) -> RiskResult:
+          s_anchor_weight: float = S_ANCHOR_WEIGHT, **gravity) -> RiskResult:
     """Risk index for every zone for one month, with the factors behind each rank."""
+    s = anchored_susceptibles(s, population, peff, s_anchor_weight)
     lam, local, imported = importation_pressure(s, population, incidence, distance_km, **gravity)
     n = np.maximum(np.asarray(population, float), 1.0)
     share = np.asarray(s, float) / n

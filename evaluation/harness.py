@@ -299,6 +299,16 @@ def run_scenario(units: eth.Units, sc: Scenario) -> dict:
     from evaluation import challengers
     extra = challengers.rankings(panel, res, m0, monthly_truth, true_s_share, seed=sc.seed)
     extra["index_no_nowcast"] = res_raw.lam
+    # Fitted settings: grid search on reported data from the warm-up years only (months
+    # 24 .. m0), so the scored period is never seen by the fit.
+    from services.risk.fit import fit
+    from services.risk.panel import rescore
+    fitted = fit(panel, res, fit_from=24, fit_until=m0)
+    if fitted:
+        extra["index_fitted"] = rescore(panel, res, s_anchor_weight=fitted["s_anchor_weight"],
+                                        c=fitted["c"], background=fitted["background"])
+    extra["index_coverage_anchored"] = rescore(panel, res, s_anchor_weight=0.5)
+    extra["index_depletion_capped"] = run_panel(panel, max_depletion=0.3).lam
     risk = score_risk(res, panel, onset_months, monthly_truth, true_s_share, m0, seed=sc.seed, extra=extra)
     if HUB_DIR is not None:
         import csv
@@ -319,13 +329,17 @@ def run_scenario(units: eth.Units, sc: Scenario) -> dict:
         "true_reporting_rate_median": float(np.median(rep.reporting_rate)),
     }
     return {"scenario": asdict(sc), "units": U, "weeks_scored": W - t0, "outbreaks": len(onsets),
-            "large_outbreaks": len(large), "detection": detection, "risk": risk, "reconstruction": recon}
+            "large_outbreaks": len(large), "detection": detection, "risk": risk, "reconstruction": recon,
+            "fitted_settings": fitted}
 
 
 # --- Report ------------------------------------------------------------------------------
 
 CANDIDATE_LABELS = [
     ("index", "**Risk index (1 month)**"), ("index_3m", "Risk index (3-month horizon)"),
+    ("index_fitted", "Risk index, settings fitted on warm-up years"),
+    ("index_coverage_anchored", "Risk index, susceptibles half coverage-anchored"),
+    ("index_depletion_capped", "Risk index, depletion capped at 30%/month"),
     ("index_no_nowcast", "Risk index without nowcasting (ablation)"),
     ("susceptible_share", "Our susceptible share alone (ablation)"),
     ("boosted_trees", "Challenger: gradient-boosted trees"),
@@ -386,7 +400,8 @@ def markdown(results: list[dict], units: eth.Units, name: str) -> str:
               f"three months before: {_f(rk['ignitions_in_top_k_3_months_before'], True)}.", "",
               f"Reconstruction: reporting rate estimated for {rc['rho_estimated_units']} units, median absolute error "
               f"{_f(rc['rho_median_abs_error'], nd=3)} (true median {_f(rc['true_reporting_rate_median'], nd=3)}), rank correlation "
-              f"{_f(rc['rho_rank_correlation'])}; susceptible-share rank correlation with truth {_f(rc['susceptible_share_rank_correlation'])}.", ""]
+              f"{_f(rc['rho_rank_correlation'])}; susceptible-share rank correlation with truth {_f(rc['susceptible_share_rank_correlation'])}.",
+              f"Fitted settings (warm-up years, reported data): {r.get('fitted_settings') or 'not enough data'}.", ""]
     L += ["## How to read this", "",
           "- **The risk index is shown as a risk ranking only where it beats every baseline** (METHODOLOGY 4.6). Where it does not, it stays internal.",
           "- **Circularity:** the gravity scenario shares the gravity idea with our model, so its scores are optimistic; the radiation and stouffer scenarios test robustness to a different spread mechanism.",

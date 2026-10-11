@@ -124,8 +124,8 @@ def rankings(panel, res, m0: int, monthly_truth: np.ndarray, true_s_share: np.nd
             X = np.vstack([features(panel, res, t, W, known(t)) for t in train_months])
             y = np.concatenate([target[t] for t in train_months])
             ok = ~np.isnan(y)
-            glm = PoissonRegressor(alpha=1e-4, max_iter=300).fit(X[ok][:, :9], y[ok])
-            hyb = PoissonRegressor(alpha=1e-4, max_iter=300).fit(X[ok], y[ok])
+            glm = PoissonRegressor(alpha=1e-4, max_iter=2000).fit(X[ok][:, :9], y[ok])
+            hyb = PoissonRegressor(alpha=1e-4, max_iter=2000).fit(X[ok], y[ok])
             gbm = HistGradientBoostingRegressor(loss="poisson", max_iter=200, learning_rate=0.05,
                                                 random_state=seed).fit(X[ok], y[ok])
             ly = np.log1p(settled_inc[:m - 2])

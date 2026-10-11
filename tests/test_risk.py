@@ -123,3 +123,33 @@ def test_nowcast_scales_recent_months_by_learned_completeness():
     assert used == {0: pytest.approx(0.5), 1: pytest.approx(0.8)}
     assert np.allclose(fixed[28:], 10.0)
     assert nc.completeness(settled, seen0, t=3, lag=0) is None   # no settled history yet
+
+
+def test_anchored_susceptibles_endpoints():
+    s, pop, peff = np.array([10.0, 30.0]), np.array([100.0, 100.0]), np.array([0.9, 0.5])
+    assert np.allclose(mr.anchored_susceptibles(s, pop, peff, 1.0), s)
+    cov = mr.anchored_susceptibles(s, pop, peff, 0.0)
+    # coverage-only: shares proportional to (1 - P_eff) = 0.1 : 0.5, same mean share (0.2)
+    assert cov[1] / cov[0] == pytest.approx(5.0) and cov.mean() / 100 == pytest.approx(0.2)
+
+
+def test_depletion_cap_limits_one_noisy_month():
+    full = mr.step_susceptibles(1000, 0, 0, cases=900, reporting_rate=1.0)
+    capped = mr.step_susceptibles(1000, 0, 0, cases=900, reporting_rate=1.0, max_depletion=0.3)
+    assert float(full) < 100 and float(capped) == pytest.approx((1000 - 1000 / 180) * 0.7)
+
+
+def test_fit_picks_settings_and_rescore_matches_run():
+    from services.risk.fit import fit
+    from services.risk.panel import Panel, rescore, run
+    rng = np.random.default_rng(3)
+    T, Z = 40, 12
+    cases = rng.poisson(3, (T, Z)).astype(float)
+    p = Panel(pcodes=[str(i) for i in range(Z)], population=np.full(Z, 1e5), lat=7 + rng.random(Z) * 3,
+              lon=36 + rng.random(Z) * 5, months=[(2020 + m // 12, m % 12 + 1) for m in range(T)],
+              births=np.full((T, Z), 300.0), mcv1=np.tile(rng.uniform(0.3, 0.9, Z), (T, 1)),
+              mcv2=np.full((T, Z), 0.2), cases=cases)
+    r = run(p)
+    assert np.allclose(rescore(p, r), r.lam)                       # same settings, same result
+    best = fit(p, r, fit_from=12, fit_until=36)
+    assert set(best) >= {"c", "background", "s_anchor_weight", "precision"} and 0 <= best["precision"] <= 1

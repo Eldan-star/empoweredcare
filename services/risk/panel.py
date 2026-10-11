@@ -48,6 +48,7 @@ class PanelResult:
     index: np.ndarray        # 1-month horizon, 0-100
     index_3m: np.ndarray
     silent: np.ndarray       # (months, zones) bool
+    incidence: Optional[np.ndarray] = None   # (months, zones) estimated true infections used
     factors: list[list[dict]] = field(default_factory=list)  # per month, per zone
 
 
@@ -100,6 +101,7 @@ def _known(panel: Panel, t: int, settle_months: int, nowcast: bool = False) -> n
 def run(panel: Panel, incidence_months: int = 2, silent_months: int = 1, min_months: int = 24,
         prior_months: float = 36.0, ve1: float = mr.VE1, ve2: float = mr.VE2, r0: float = mr.R0,
         settle_months: int = 2, rho_window_months: int = 96, nowcast: bool = True,
+        max_depletion: Optional[float] = None, s_anchor_weight: float = mr.S_ANCHOR_WEIGHT,
         **gravity) -> PanelResult:
     T, Z = panel.births.shape
     peff = mr.p_eff(panel.mcv1, panel.mcv2, ve1, ve2)
@@ -109,7 +111,7 @@ def run(panel: Panel, incidence_months: int = 2, silent_months: int = 1, min_mon
 
     z, zb = (lambda: np.zeros((T, Z))), (lambda: np.zeros((T, Z), bool))
     out = PanelResult(s=z(), rho=z(), rho_estimated=zb(), peff=z(), lam=z(), index=z(),
-                      index_3m=z(), silent=zb())
+                      index_3m=z(), silent=zb(), incidence=z())
     s0 = mr.initial_susceptibles(panel.population, r0)
     s = s0
     for t in range(T):
@@ -121,18 +123,31 @@ def run(panel: Panel, incidence_months: int = 2, silent_months: int = 1, min_mon
                  else panel.sia_target_share)
         if panel.cases_provisional is None:
             s = mr.step_susceptibles(s, panel.births[t], peff[t], cases[t], rho,
-                                     mr.sia_immunized(s, sia[t], share(t), ve2))
+                                     mr.sia_immunized(s, sia[t], share(t), ve2), max_depletion=max_depletion)
         else:  # data were revised: rebuild the susceptible path from the start
             s = s0
             for m in range(t + 1):
                 s = mr.step_susceptibles(s, panel.births[m], peff[m], cases[m], rho,
-                                         mr.sia_immunized(s, sia[m], share(m), ve2))
+                                         mr.sia_immunized(s, sia[m], share(m), ve2), max_depletion=max_depletion)
         lo = max(0, t - incidence_months + 1)
         incidence = cases[lo:t + 1].sum(axis=0) / rho
         silent = ~reported[max(0, t - silent_months + 1):t + 1].any(axis=0)
         res = mr.score(s, panel.population, incidence, dist, panel.births[t], peff[t],
-                       silent=silent, threats=panel.threats, **gravity)
+                       silent=silent, threats=panel.threats, s_anchor_weight=s_anchor_weight, **gravity)
+        out.incidence[t] = incidence
         out.s[t], out.rho[t], out.rho_estimated[t], out.peff[t] = s, rho, estimated, peff[t]
         out.lam[t], out.index[t], out.index_3m[t], out.silent[t] = res.lam, res.index, res.index_3m, silent
         out.factors.append(res.factors)
     return out
+
+
+def rescore(panel: Panel, res: PanelResult, s_anchor_weight: float = mr.S_ANCHOR_WEIGHT, **gravity) -> np.ndarray:
+    """Importation pressure (months x zones) with different scoring settings, reusing a
+    run's susceptibles and incidence (they do not depend on these settings). Used to fit
+    the settings cheaply."""
+    dist = mr.distance_matrix(panel.lat, panel.lon)
+    lam = np.zeros_like(res.lam)
+    for t in range(lam.shape[0]):
+        s = mr.anchored_susceptibles(res.s[t], panel.population, res.peff[t], s_anchor_weight)
+        lam[t] = mr.importation_pressure(s, panel.population, res.incidence[t], dist, **gravity)[0]
+    return lam
