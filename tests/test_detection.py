@@ -147,3 +147,30 @@ def test_other_diseases_single_case_rules():
     assert evaluate(weeks([1], confirmed=[1]), cholera)[0].level == "action"
     with pytest.raises(KeyError):
         diseases.get("malaria")  # baseline rules not implemented yet
+
+
+def test_ewma_hand_computed():
+    # Week 10 is the first with a baseline (8 weeks + 2-week guard): weeks 0..7, all 1
+    # (sd 0 -> floor 0.5). z stays 1 through week 9; week 10 has 6: z = 0.3*6 + 0.7*1 = 2.5.
+    # Standardised: (2.5 - 1) / (0.5 * sqrt(0.3/1.7)) = 1.5 / 0.21004 = 7.1414
+    e = early_rise.ewma([1] * 10 + [6])
+    assert e[9] is None
+    assert e[10] == pytest.approx(1.5 / (0.5 * math.sqrt(0.3 / 1.7)))
+    assert "EWMA" in early_rise.flags_at([1] * 10 + [6])["fired"]
+
+
+def test_space_time_scan_finds_a_planted_cluster():
+    import numpy as np
+    from services.detection.scan import scan
+    rng = np.random.default_rng(0)
+    U, W = 40, 20
+    lat = np.repeat(np.arange(8) * 0.3 + 7, 5)[:U]
+    lon = np.tile(np.arange(5) * 0.3 + 38, 8)[:U]
+    counts = rng.poisson(1.0, (W, U))
+    counts[-2:, [0, 1, 5]] += 8          # three neighbouring units, last two weeks
+    c = scan(counts, lat, lon, reps=99, seed=1)
+    assert c is not None and c.p_value <= 0.05 and c.weeks <= 3
+    assert {0, 1, 5} <= set(c.units) and c.relative_risk > 2
+    flat = rng.poisson(1.0, (W, U))
+    c0 = scan(flat, lat, lon, reps=99, seed=1)
+    assert c0 is None or c0.p_value > 0.05

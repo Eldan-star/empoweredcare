@@ -34,6 +34,7 @@ PRIORITY_POINTS = {
     "cfr_above_acceptable": 20,
     "risk_index_max": 30,          # scaled by the 0-100 risk index
     "per_threat_factor": 5,        # conflict, displacement, ... up to 2
+    "space_time_cluster": 10,      # inside a significant space-time cluster (p <= 0.05)
 }
 
 

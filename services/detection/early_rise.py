@@ -14,6 +14,11 @@ Routine data is weekly, so one period is one week. Standard deviations use n-1, 
 floored at `min_sd`: most woredas report zero most weeks, which gives sd = 0 and an
 infinite statistic. The floor is an implementation choice, stated in METHODOLOGY.
 
+EWMA follows Roberts 1959 (Technometrics 1:239), the exponentially weighted moving
+average chart, on a rolling baseline:
+    z_t = lam x_t + (1 - lam) z_{t-1};  flag if (z_t - mean) / (sd sqrt(lam / (2 - lam))) > L
+with lam = 0.3 and L = 3, conventional values, and the same baseline/guard as CUSUM.
+
 Poisson CUSUM follows Lucas 1985 (Technometrics 27:129):
     S_t = max(0, S_{t-1} + x_t - k),  k = (mu1 - mu0) / (ln mu1 - ln mu0)
 with mu0 the expected count, mu1 = shift x mu0 the rise worth detecting, an alarm when
@@ -26,6 +31,7 @@ from statistics import mean, stdev
 from typing import Optional, Sequence
 
 EARS_THRESHOLD = {"C1": 3.0, "C2": 3.0, "C3": 2.0}
+EWMA_L = 3.0
 
 
 def _z(x: float, base: Sequence[float], min_sd: float) -> float:
@@ -81,6 +87,23 @@ def poisson_cusum(counts: Sequence[float], baseline_weeks: int = 8, guard_weeks:
     return CusumResult(stat, alarm, expected)
 
 
+def ewma(counts: Sequence[float], lam: float = 0.3, baseline_weeks: int = 8, guard_weeks: int = 2,
+         min_sd: float = 0.5) -> list[Optional[float]]:
+    """Standardised EWMA statistic per week (None until a baseline exists)."""
+    out: list[Optional[float]] = []
+    z = None
+    for t, x in enumerate(counts):
+        z = x if z is None else lam * x + (1 - lam) * z
+        lo, hi = t - guard_weeks - baseline_weeks, t - guard_weeks
+        if lo < 0:
+            out.append(None)
+            continue
+        base = counts[lo:hi]
+        sd = max(stdev(base), min_sd)
+        out.append((z - mean(base)) / (sd * math.sqrt(lam / (2 - lam))))
+    return out
+
+
 def doubling(counts: Sequence[float], weeks: int = 3, factor: float = 2.0) -> list[Optional[bool]]:
     """EPHI humanitarian alert (PHEM Guideline 2022, Table 4-6): the current week is at
     least `factor` times the average of the previous `weeks` weeks. A week with no cases
@@ -99,13 +122,16 @@ def flags_at(counts: Sequence[float], t: int = -1, min_sd: float = 0.5) -> dict:
     t = t % len(counts)
     c1, c2, c3 = ears_c1(counts, min_sd)[t], ears_c2(counts, min_sd)[t], ears_c3(counts, min_sd)[t]
     cus = poisson_cusum(counts)
+    ew = ewma(counts)[t]
     out = {
         "ears_c1": c1, "ears_c2": c2, "ears_c3": c3,
-        "cusum": cus.statistic[t], "cusum_expected": cus.expected[t],
+        "cusum": cus.statistic[t], "cusum_expected": cus.expected[t], "ewma": ew,
     }
     fired = [name for name, v in (("C1", c1), ("C2", c2), ("C3", c3))
              if v is not None and v > EARS_THRESHOLD[name]]
     if cus.alarm[t]:
         fired.append("CUSUM")
+    if ew is not None and ew > EWMA_L:
+        fired.append("EWMA")
     out["fired"] = fired
     return out

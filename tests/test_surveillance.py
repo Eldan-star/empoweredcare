@@ -153,3 +153,25 @@ def test_counts_keep_snapshots_and_feed_the_nowcast(geo):
     assert p.cases[march, 0] == 6                       # final value
     assert p.cases_provisional[march, 0] == 2           # as seen at the end of March
     assert p.cases_provisional_lag1[march, 0] == 6      # as seen at the end of April
+
+
+def test_detect_reports_a_space_time_cluster(geo):
+    # Many woredas around Jimma, a burst in three neighbours in the last two weeks.
+    import numpy as np
+    rng = np.random.default_rng(2)
+    for i in range(12):
+        p = f"ET0407{i + 10:02d}"
+        geo.add(OrgUnit(pcode=p, name=f"W{i}", level=3, parent_pcode="ET0407", population=100_000,
+                        lat=7.0 + (i // 4) * 0.2, lon=36.0 + (i % 4) * 0.2))
+    geo.flush()
+    for i in range(12):
+        vals = list(rng.poisson(1, 12))
+        if i in (0, 1, 4):
+            vals[-2:] = [v + 8 for v in vals[-2:]]
+        counts(geo, f"ET0407{i + 10:02d}", 29, [int(v) for v in vals])
+    res, cluster = surveillance.detect(geo, "measles", (2026, 40), level=3, with_cluster=True)
+    top = cluster["most_likely"]
+    assert top["p_value"] <= 0.05 and cluster["significant"]
+    assert {"ET040710", "ET040711", "ET040714"} <= set(top["members"])
+    flagged = [r for r in res if "space_time_cluster" in r["flags"]]
+    assert flagged and all(r["priority_parts"]["space_time_cluster"] == 10 for r in flagged)

@@ -643,12 +643,13 @@ def surveillance_detect(disease: str = "measles", week: Optional[str] = None, le
     except KeyError as e:
         raise HTTPException(status_code=400, detail=str(e))
     wk = _iso_week(week) or surveillance.current_week()
-    units = surveillance.detect(db, disease, wk, level)
+    units, cluster = surveillance.detect(db, disease, wk, level, with_cluster=True)
     return {"disease": disease, "iso_year": wk[0], "iso_week": wk[1], "unit_level": level,
             "counts": {"action": sum(u["level"] == "action" for u in units),
                        "alert": sum(u["level"] == "alert" for u in units),
                        "units_with_data": len(units)},
             "units": units,
+            "space_time_cluster": cluster,
             "note": None if units else "No weekly counts stored for this period. Counts arrive from DHIS2 (after EPHI approval) or manual entry."}
 
 

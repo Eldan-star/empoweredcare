@@ -45,17 +45,19 @@ class Scenario:
     rate_mean: float = 0.12
     importation_rate: float = 0.05
     beta_scale: float = 1.0
+    scan: bool = False
     years: int = 15
     burn_in_years: int = 4
     note: str = ""
 
 
 DEFAULT_SCENARIOS = [
-    Scenario("gravity", "gravity", note="Simulator mixing is gravity (laser defaults); our model uses its own gravity exponents"),
+    Scenario("gravity", "gravity", scan=True,
+             note="Simulator mixing is gravity (laser defaults); our model uses its own gravity exponents"),
     Scenario("radiation", "radiation", note="Mis-specified: simulator uses radiation mixing"),
     Scenario("stouffer", "stouffer", note="Mis-specified: simulator uses intervening-opportunities mixing"),
     Scenario("low-reporting", "gravity", seed=2, rate_mean=0.05, note="Only ~5% of infections reported"),
-    Scenario("episodic", "gravity", seed=3, beta_scale=0.8,
+    Scenario("episodic", "gravity", seed=3, beta_scale=0.8, scan=True,
              note="Lower transmission: more woredas between outbreaks, closer to Ethiopia's reported pattern"),
 ]
 
@@ -72,6 +74,37 @@ def levels_as_of(rep: eth.Reported, t: int) -> tuple[np.ndarray, np.ndarray]:
     action = (s_win >= MEASLES.action.suspected) | (c_win >= MEASLES.action.confirmed)
     alert = np.nan_to_num(s[t]) >= MEASLES.alert.suspected
     return action, alert
+
+
+def ewma_as_of(rep: eth.Reported, t: int, lam: float = 0.3, L: float = 3.0, baseline: int = 8, guard: int = 2,
+               min_sd: float = 0.5) -> np.ndarray:
+    """EWMA alarm per unit for week t on the data visible at t (vectorised form of
+    services.detection.early_rise.ewma, warm-started at the start of the baseline)."""
+    lo = t - guard - baseline
+    if lo < 0:
+        return np.zeros(rep.suspected.shape[1], bool)
+    s, _ = rep.as_of(t)
+    x = np.nan_to_num(s[lo:t + 1])
+    base = x[:baseline]
+    mu, sd = base.mean(axis=0), np.maximum(base.std(axis=0, ddof=1), min_sd)
+    z = x[0].astype(float)
+    for row in x[1:]:
+        z = lam * row + (1 - lam) * z
+    return (z - mu) / (sd * np.sqrt(lam / (2 - lam))) > L
+
+
+def scan_flags(rep: eth.Reported, units: eth.Units, t0: int, every: int = 4, reps: int = 49,
+               window: int = 12) -> np.ndarray:
+    """Units inside a significant (p <= 0.05) space-time cluster, on sampled weeks."""
+    from services.detection.scan import scan_all
+    W, U = rep.suspected.shape
+    flags = np.zeros((W, U), bool)
+    for t in range(t0, W, every):
+        s, _ = rep.as_of(t)
+        for c in scan_all(np.nan_to_num(s[t - window + 1:t + 1]), units.lat, units.lon, reps=reps, seed=t):
+            if c.p_value <= 0.05:
+                flags[t, c.units] = True
+    return flags
 
 
 def episodes(flags: np.ndarray, gap: int = 4) -> list[tuple[int, int]]:
@@ -267,8 +300,11 @@ def run_scenario(units: eth.Units, sc: Scenario) -> dict:
 
     action = np.zeros((W, U), bool)
     alert = np.zeros((W, U), bool)
+    ewma_alarm = np.zeros((W, U), bool)
     for t in range(t0, W):
         action[t], alert[t] = levels_as_of(rep, t)
+        ewma_alarm[t] = ewma_as_of(rep, t)
+    scan_alarm = scan_flags(rep, units, t0) if sc.scan else np.zeros((W, U), bool)
     inf = truth.weekly_infections.astype(float)
     roll = np.array([inf[max(0, t - 3):t + 1].sum(axis=0) for t in range(W)])
     transmitting = roll / units.population[None, :] * 1e5 >= 20.0
@@ -279,7 +315,13 @@ def run_scenario(units: eth.Units, sc: Scenario) -> dict:
         "action_large": score_detection(ep_action, large, t0, U, W - t0, transmitting),
         "alert_all": score_detection(ep_alert, onsets, t0, U, W - t0, transmitting),
         "alert_large": score_detection(ep_alert, large, t0, U, W - t0, transmitting),
+        "ewma_all": score_detection([e for e in episodes(ewma_alarm) if e[0] >= t0], onsets, t0, U, W - t0, transmitting),
     }
+    if sc.scan:
+        # Scan sampled every 4th week: scored with a wider gap so one cluster is one episode.
+        ep_scan = [e for e in episodes(scan_alarm, gap=8) if e[0] >= t0]
+        detection["scan_all"] = score_detection(ep_scan, onsets, t0, U, W - t0, transmitting)
+        detection["scan_large"] = score_detection(ep_scan, large, t0, U, W - t0, transmitting)
 
     keys, month_of, cases, provisional, lag1 = monthly(truth, rep)
     T = len(keys)
@@ -383,7 +425,12 @@ def markdown(results: list[dict], units: eth.Units, name: str) -> str:
               "| Detection | Outbreaks | Sensitivity | PPV | False episodes / unit-year | Median delay (days) | Detected by onset |",
               "|---|---|---|---|---|---|---|"]
         for key, label in [("action_all", "Action threshold, all outbreaks"), ("action_large", "Action threshold, large outbreaks"),
-                           ("alert_all", "Alert threshold, all outbreaks"), ("alert_large", "Alert threshold, large outbreaks")]:
+                           ("alert_all", "Alert threshold, all outbreaks"), ("alert_large", "Alert threshold, large outbreaks"),
+                           ("ewma_all", "EWMA flag, all outbreaks"),
+                           ("scan_all", "Space-time scan (every 4th week), all outbreaks"),
+                           ("scan_large", "Space-time scan (every 4th week), large outbreaks")]:
+            if key not in det:
+                continue
             d = det[key]
             L.append(f"| {label} | {d['outbreaks']} | {_f(d['sensitivity'], True)} | {_f(d['ppv'], True)} | "
                      f"{_f(d['false_episodes_per_unit_year'])} | {_f(d['median_delay_days'], nd=0)} | {_f(d['share_detected_before_onset'], True)} |")
@@ -429,7 +476,7 @@ def main(argv: Optional[list[str]] = None) -> dict:
             units = eth.units_from_db(s, level=3)
     else:
         units = eth.synthetic_units(60 if args.quick else args.n)
-    scenarios = ([Scenario("quick", years=8, burn_in_years=3)] if args.quick else DEFAULT_SCENARIOS)
+    scenarios = ([Scenario("quick", years=8, burn_in_years=3, scan=True)] if args.quick else DEFAULT_SCENARIOS)
     results = [run_scenario(units, sc) for sc in scenarios]
     out = {"name": args.name, "date": date.today().isoformat(), "synthetic_units": units.synthetic, "results": results}
     if not args.no_write:

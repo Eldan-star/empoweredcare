@@ -11,6 +11,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from typing import Optional
 
+import numpy as np
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -88,7 +89,8 @@ def weekly_series(session: Session, pcode: str, disease: str = "measles", weeks:
 
 
 def detect(session: Session, disease: str = "measles", week: Optional[tuple[int, int]] = None,
-           level: int = 3, humanitarian: set[str] = frozenset(), history_weeks: int = 12) -> list[dict]:
+           level: int = 3, humanitarian: set[str] = frozenset(), history_weeks: int = 12,
+           with_cluster: bool = False):
     """EPHI levels for every unit at `level` with any data in the last `history_weeks`
     weeks, ordered: action threshold first, then alert, then by priority."""
     cfg = diseases.get(disease)
@@ -104,9 +106,44 @@ def detect(session: Session, disease: str = "measles", week: Optional[tuple[int,
         res = evaluate(series, cfg, humanitarian=pcode in humanitarian, weeks=[-1])[0]
         u = units[pcode]
         out.append({"pcode": pcode, "name": u.name, "parent_pcode": u.parent_pcode, **res.as_dict()})
+    cluster = _cluster(out, units, rows_by_unit, start, week)
     rank = {"action": 0, "alert": 1, None: 2}
     out.sort(key=lambda r: (rank[r["level"]], -r["priority"], r["pcode"]))
-    return out
+    return out if not with_cluster else (out, cluster)
+
+
+def _cluster(results: list[dict], units: dict, rows_by_unit, start, week, max_weeks: int = 4) -> Optional[dict]:
+    """Run the space-time scan over the units with data; mark members of a significant
+    cluster (p <= 0.05) in their flags and priority."""
+    from services.detection.scan import scan_all
+    from services.detection.thresholds import PRIORITY_POINTS
+    pcodes = [r["pcode"] for r in results if units[r["pcode"]].lat is not None]
+    if len(pcodes) < 3:
+        return None
+    weeks = [w.key for w in complete([], start, week)]
+    counts = np.zeros((len(weeks), len(pcodes)))
+    for j, p in enumerate(pcodes):
+        for i, k in enumerate(weeks):
+            counts[i, j] = sum(r.suspected or 0 for r in rows_by_unit[p].get(k, []))
+    if counts[-max_weeks:].sum() < 5:
+        return None
+    found = scan_all(counts, [units[p].lat for p in pcodes], [units[p].lon for p in pcodes], max_weeks=max_weeks)
+    if not found:
+        return None
+    clusters = []
+    for c in found:
+        members = [pcodes[i] for i in c.units]
+        info = {"members": members, "weeks": c.weeks, "observed": c.observed, "expected": round(c.expected, 2),
+                "relative_risk": round(c.relative_risk, 2), "p_value": round(c.p_value, 3)}
+        clusters.append(info)
+        if c.p_value <= 0.05:
+            for r in results:
+                if r["pcode"] in members:
+                    r["flags"]["space_time_cluster"] = {k: info[k] for k in ("relative_risk", "p_value", "weeks")}
+                    r["priority_parts"]["space_time_cluster"] = PRIORITY_POINTS["space_time_cluster"]
+                    r["priority"] = min(100.0, float(sum(r["priority_parts"].values())))
+    return {"method": "space-time permutation scan (Kulldorff 2005)", "significant": [c for c in clusters if c["p_value"] <= 0.05],
+            "most_likely": clusters[0]}
 
 
 def latest_risk(session: Session, year: Optional[int] = None, month: Optional[int] = None,
