@@ -28,7 +28,71 @@ Five versions of the simulated world were run:
 | low-reporting | Only about 5% of infections are reported |
 | episodic | Lower transmission, so places are quiet between outbreaks more often |
 
-## Results in plain language
+## Update: improvements round (11 October 2026)
+
+Full numbers: `evaluation/reports/2026-10-11-m3-improvements.md`. Same five scenarios and 400
+woreda-sized units. This round adds:
+- **rival models:** persistence, EWMA, ARIMA(1,0,0), an hhh4-type count regression, a
+  **hybrid** (that regression plus our model's susceptible and spread estimates), and
+  gradient-boosted trees;
+- **two perfect-knowledge references**, to show the ceiling;
+- **nowcasting** of late reports;
+- **fitted settings**;
+- **sturdier susceptible options**;
+- the **EWMA flag** and the **space-time cluster scan**.
+
+**Where measles will be heaviest next quarter** (top 10% picked, share correct; random = 10%):
+
+| Method | Correct | Picks in the true top 20% |
+|---|---|---|
+| **Hybrid model (count regression + our susceptibility estimates)** | **61–65%** (46% at 5% reporting) | **84–89%** |
+| Count regression alone / boosted trees | 58–62% | 82–86% |
+| Our risk index, fitted settings | 53–55% (**49%** at 5% reporting, the best there) | 77–81% |
+| Our risk index, original | 50–53% | 76–79% |
+| Recent reported cases (persistence) | 52–54% | 76–80% |
+| Lowest coverage / most cases last year | 25–31% | – |
+| *Reference: our formula with perfect inputs* | *55–59%* | – |
+| *Reference: perfect knowledge of current infections* | *70–74%* | – |
+
+**What this means:**
+- **The hybrid wins** in every normal-reporting scenario, by about 10 points over our
+  original index.
+- **Our formula itself is the limit.** Even fed perfect data it reaches only 55–59%. The
+  regression learns patterns the formula leaves out.
+- **Combining both** (the hybrid) is better than either alone.
+- **When reporting is very poor (5%)**, the fitted index holds up best. The learned models
+  have less to learn from.
+- **Nearly 9 of every 10 hybrid picks are in the true top 20%.** Its misses are near
+  misses.
+- **The ceiling is 70–74%,** with perfect knowledge of current infections. Better
+  nowcasting and faster data are where the remaining room is.
+
+**Which quiet woreda flares up next:** still not solved. No method beats random
+(13–17%), except the simulator's true susceptible pool (20–27%). Our formula fed perfect
+data scores worse than random here, because its pressure term points at places already in
+transmission. This confirms the problem is estimating susceptible children, which needs
+real data and a stronger estimation method. It is not a tuning issue.
+
+**Detection add-ons** (normal reporting):
+- **Alert threshold:** unchanged, about 75% caught within about a week.
+- **EWMA flag:** 20–25% caught, with about 90% of alarms real. Useful for ranking alerts,
+  not as a main alarm.
+- **Space-time cluster scan:** 19–27% caught, with about 80% of alarms real.
+  - It finds clusters that cross woreda boundaries.
+  - The test ran it only every fourth week; in weekly use it would catch more.
+
+**Nowcasting:** about +1 point here. Its value grows when delays are longer than in this
+simulation; with real snapshot data it will learn the real delays.
+
+**Recommendation:**
+1. **Use the hybrid model for "where measles will be heaviest next quarter"** once there
+   are at least 2–3 years of weekly counts to train on.
+2. **Use the fitted risk index** before that, and wherever reporting is very poor.
+3. **Show the index's factors** (susceptible build-up, nearby outbreaks, displacement) as
+   the explanation in both cases.
+4. **Keep ignition internal.**
+
+## Results in plain language (first run, 10 October)
 
 ### 1. EPHI's thresholds (detection)
 

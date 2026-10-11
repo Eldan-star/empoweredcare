@@ -428,6 +428,13 @@ correctly).
     (44–53% precision against 24–31% for the baselines).
   - It does **not** beat random for ignition among quiet units, so it is shown only for the
     burden question.
+- **Improvements round (11 October 2026):**
+  - A hybrid (hhh4-type count regression plus the risk model's susceptibility and spread
+    estimates) reaches 61–65% on next-quarter burden, against 53–55% for the fitted index.
+    It is the recommended burden ranking once 2–3 years of counts exist; the fitted index
+    is the fallback.
+  - Ignition remains unsolved.
+  - Details are in `EVALUATION.md`.
 
 **Why laser-measles is the test bed and not the live engine.**
 - Calibrating it needs Ethiopian case history.

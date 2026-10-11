@@ -506,6 +506,37 @@ Full numbers: `evaluation/reports/2026-10-10-m3-baseline.md`. Plain-language sum
   quarter". Ignition stays internal until the susceptible estimate improves and is
   validated on real data.
 
+### 5.1b Improvements round (11 October 2026)
+
+Full numbers: `evaluation/reports/2026-10-11-m3-improvements.md`.
+
+**Next-quarter burden** (precision@10%):
+
+| Model | Precision@10% | Notes |
+|---|---|---|
+| Hybrid count regression with risk-model covariates | 61–65% | Picks in the true top 20%: 84–89% |
+| Count regression (hhh4-type) and gradient-boosted trees | 58–62% | |
+| Risk index with fitted settings | 53–55% | Best (49%) at 5% reporting |
+| Original risk index | 50–53% | |
+| Persistence | 52–54% | |
+| *Our formula with true inputs* | *55–59%* | Reference |
+| *True recent infections* | *70–74%* | Reference |
+
+**Ignition among quiet units:** nothing beats random except true susceptibles (20–27%).
+
+**Detection add-ons:**
+- EWMA: 20–25% sensitivity, PPV about 0.9.
+- Space-time scan, sampled every fourth week: 19–27% sensitivity, PPV about 0.8.
+
+**Fitted settings** (from warm-up years, reported data):
+- distance exponent c = 1 in four of five scenarios;
+- background 0.01;
+- coverage anchoring 0–0.5.
+
+**Recommendation for review:** adopt the hybrid as the burden ranking once real history
+allows training, with the fitted index as fallback and as the source of explanatory
+factors.
+
 ### 5.2 Implementation choices a reviewer should know
 
 | Choice | Value | Why |
